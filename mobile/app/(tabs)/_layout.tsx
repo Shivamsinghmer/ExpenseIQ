@@ -1,8 +1,8 @@
-import React from "react";
-import { Tabs, Redirect } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { View, Text, ActivityIndicator } from "react-native";
-import { useTheme } from "../providers/theme-provider";
+import { useTheme } from "../../providers/theme-provider";
+import { useEffect } from "react";
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
     const icons: Record<string, string> = {
@@ -23,8 +23,15 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 export default function TabsLayout() {
     const { isSignedIn, isLoaded } = useAuth();
     const { isDark } = useTheme();
+    const router = useRouter();
 
-    if (!isLoaded) {
+    useEffect(() => {
+        if (isLoaded && !isSignedIn) {
+            router.replace("/(auth)/sign-in");
+        }
+    }, [isLoaded, isSignedIn]);
+
+    if (!isLoaded || !isSignedIn) {
         return (
             <View className="flex-1 items-center justify-center bg-white dark:bg-black">
                 <ActivityIndicator size="large" color="#ff3333" />
@@ -32,45 +39,49 @@ export default function TabsLayout() {
         );
     }
 
-    if (!isSignedIn) {
-        return <Redirect href="/(auth)/sign-in" />;
-    }
-
     return (
         <Tabs
             screenOptions={{
                 headerStyle: {
-                    backgroundColor: isDark ? "#1a212b" : "#ffffff", // surface-dark / surface
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc", // background-dark / background
                     shadowColor: "transparent",
                     elevation: 0,
                     borderBottomWidth: 1,
-                    borderBottomColor: isDark ? "#545454" : "#e0e0e0", // border-dark / border-light (approx)
+                    borderBottomColor: isDark ? "#334155" : "#e2e8f0", // border-dark / border
+                    height: 100,
                 },
-                headerTintColor: isDark ? "#ffffff" : "#000000",
                 headerTitleStyle: {
-                    fontWeight: "700",
-                    fontSize: 18,
+                    fontWeight: "800",
+                    fontSize: 24,
+                    color: isDark ? "#fff" : "#1e293b",
                 },
+                headerTitleAlign: "left",
                 tabBarStyle: {
-                    backgroundColor: isDark ? "#1a212b" : "#ffffff", // surface-dark / surface
-                    borderTopColor: isDark ? "#545454" : "#e0e0e0", // border-dark / border-light
-                    borderTopWidth: 1,
-                    height: 60,
-                    paddingBottom: 8,
-                    paddingTop: 8,
+                    backgroundColor: isDark ? "#1e293b" : "#ffffff", // surface-dark / surface
+                    borderTopWidth: 0,
+                    elevation: 0,
+                    shadowOpacity: 0.1,
+                    shadowRadius: 10,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: -4 },
+                    height: 70,
+                    paddingBottom: 10,
+                    paddingTop: 10,
+                    position: "absolute",
+                    bottom: 20,
+                    left: 20,
+                    right: 20,
+                    borderRadius: 25,
                 },
-                tabBarActiveTintColor: isDark ? "#818cf8" : "#4f46e5", // primary-dark / primary
-                tabBarInactiveTintColor: isDark ? "#999999" : "#737373", // muted / input
-                tabBarLabelStyle: {
-                    fontSize: 11,
-                    fontWeight: "600",
-                },
+                tabBarActiveTintColor: "#6366f1", // primary
+                tabBarInactiveTintColor: isDark ? "#64748b" : "#94a3b8", // muted-fg
             }}
         >
             <Tabs.Screen
                 name="index"
                 options={{
                     title: "Dashboard",
+                    headerShown: false,
                     tabBarIcon: ({ focused }) => (
                         <TabIcon name="index" focused={focused} />
                     ),
@@ -107,6 +118,7 @@ export default function TabsLayout() {
                 name="ai"
                 options={{
                     title: "AI Chat",
+                    headerShown: false,
                     tabBarIcon: ({ focused }) => (
                         <TabIcon name="ai" focused={focused} />
                     ),

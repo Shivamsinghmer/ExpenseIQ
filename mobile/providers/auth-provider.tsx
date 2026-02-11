@@ -1,8 +1,8 @@
 import React, { useEffect } from "react";
 import * as SecureStore from "expo-secure-store";
 import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/clerk-expo";
-import { CLERK_PUBLISHABLE_KEY } from "../../lib/config";
-import { setAuthToken } from "../../services/api";
+import { CLERK_PUBLISHABLE_KEY } from "../lib/config";
+import { setAuthToken } from "../services/api";
 
 // Secure token cache using Expo SecureStore
 const tokenCache = {
@@ -45,7 +45,7 @@ function TokenSync({ children }: { children: React.ReactNode }) {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const publishableKey = CLERK_PUBLISHABLE_KEY;
 
-    console.log("[AuthProvider] Clerk key:", publishableKey ? `${publishableKey.substring(0, 10)}...` : "EMPTY!");
+
 
     if (!publishableKey) {
         console.warn("Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY");

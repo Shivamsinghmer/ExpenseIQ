@@ -9,7 +9,7 @@ import pg from "pg";
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 const databaseUrl = process.env.DATABASE_URL;
-console.log("[Prisma] DATABASE_URL loaded:", databaseUrl ? `${databaseUrl.substring(0, 20)}...` : "EMPTY!");
+
 if (!databaseUrl) {
     throw new Error("DATABASE_URL is not set! Check your .env file.");
 }

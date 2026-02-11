@@ -8,40 +8,38 @@ module.exports = {
     presets: [require("nativewind/preset")],
     theme: {
         extend: {
-            colors: {
-                // Layout
-                background: "#f7f9f3",
-                "background-dark": "#000000",
+            // Layout
+            background: "#f8fafc", // Slate 50
+            "background-dark": "#0f172a", // Slate 900
 
-                surface: "#ffffff",
-                "surface-dark": "#1a212b",
+            surface: "#ffffff",
+            "surface-dark": "#1e293b", // Slate 800
 
-                // Brand
-                primary: "#4f46e5",
-                "primary-dark": "#818cf8",
+            // Brand
+            primary: "#6366f1", // Indigo 500
+            "primary-dark": "#818cf8", // Indigo 400
 
-                secondary: "#14b8a6",
-                "secondary-dark": "#2dd4bf",
+            secondary: "#10b981", // Emerald 500
+            "secondary-dark": "#34d399", // Emerald 400
 
-                accent: "#f59e0b",
-                "accent-dark": "#fcd34d",
+            accent: "#f59e0b", // Amber 500
+            "accent-dark": "#fbbf24", // Amber 400
 
-                destructive: "#ef4444",
-                "destructive-dark": "#f87171",
+            destructive: "#ef4444", // Red 500
+            "destructive-dark": "#f87171", // Red 400
 
-                // UI Elements
-                border: "#000000",
-                "border-dark": "#545454",
+            // UI Elements
+            border: "#e2e8f0", // Slate 200
+            "border-dark": "#334155", // Slate 700
 
-                muted: "#f0f0f0",
-                "muted-dark": "#333333",
+            muted: "#f1f5f9", // Slate 100
+            "muted-dark": "#334155", // Slate 700
 
-                "muted-fg": "#333333",
-                "muted-fg-dark": "#cccccc",
+            "muted-fg": "#64748b", // Slate 500
+            "muted-fg-dark": "#94a3b8", // Slate 400
 
-                input: "#737373",
-                "input-dark": "#ffffff",
-            },
+            input: "#cbd5e1", // Slate 300
+            "input-dark": "#475569", // Slate 600
             fontFamily: {
                 sans: ["DM Sans", "System"],
                 mono: ["Space Mono", "monospace"],

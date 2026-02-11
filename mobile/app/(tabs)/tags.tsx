@@ -4,7 +4,7 @@ import {
     ActivityIndicator, Alert, RefreshControl,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTheme } from "../providers/theme-provider";
+import { useTheme } from "../../providers/theme-provider";
 import { tagsAPI, type Tag, type CreateTagData } from "../../services/api";
 
 const TAG_COLORS = [
@@ -13,33 +13,6 @@ const TAG_COLORS = [
     "#06B6D4", "#84CC16",
 ];
 
-function TagCard({ tag, onEdit, onDelete }: { tag: Tag; onEdit: (tag: Tag) => void; onDelete: (id: string) => void }) {
-    return (
-        <View className="bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-xl p-4 mb-3 mx-5 flex-row items-center">
-            <View className="w-10 h-10 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: tag.color + "25" }}>
-                <View className="w-4 h-4 rounded-full" style={{ backgroundColor: tag.color }} />
-            </View>
-            <View className="flex-1">
-                <Text className="text-black dark:text-white font-semibold text-sm">{tag.name}</Text>
-                <Text className="text-neutral-500 dark:text-neutral-400 text-xs mt-0.5">{tag._count?.transactions || 0} transactions</Text>
-            </View>
-            <TouchableOpacity onPress={() => onEdit(tag)} className="bg-neutral-100 dark:bg-neutral-600 rounded-xl p-2.5 mr-2">
-                <Text className="text-xs">✏️</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-                onPress={() => {
-                    Alert.alert("Delete Tag", `Delete "${tag.name}"?`, [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Delete", style: "destructive", onPress: () => onDelete(tag.id) },
-                    ]);
-                }}
-                className="bg-danger-500/10 rounded-xl p-2.5"
-            >
-                <Text className="text-xs">🗑️</Text>
-            </TouchableOpacity>
-        </View>
-    );
-}
 
 export default function Tags() {
     const queryClient = useQueryClient();
@@ -91,29 +64,50 @@ export default function Tags() {
     const isPending = createMutation.isPending || updateMutation.isPending;
 
     return (
-        <View className="flex-1 bg-white dark:bg-black">
-            <View className="px-5 pt-3 pb-2">
-                <TouchableOpacity onPress={openCreateModal} className="bg-primary rounded-xl py-3.5 items-center flex-row justify-center" activeOpacity={0.8}>
-                    <Text className="text-white text-lg mr-2">+</Text>
-                    <Text className="text-white font-semibold">Create New Tag</Text>
-                </TouchableOpacity>
-            </View>
-
+        <View className="flex-1 bg-slate-50 dark:bg-slate-900">
             {isLoading ? (
                 <View className="flex-1 items-center justify-center">
-                    <ActivityIndicator size="large" color={isDark ? "#ff6666" : "#ff3333"} />
+                    <ActivityIndicator size="large" color="#6366f1" />
                 </View>
             ) : (
                 <FlatList
                     data={tags || []}
-                    renderItem={({ item }) => <TagCard tag={item} onEdit={openEditModal} onDelete={(id) => deleteMutation.mutate(id)} />}
+                    renderItem={({ item }) => (
+                        <View className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 mb-3 mx-5 flex-row items-center shadow-sm">
+                            <View className="w-12 h-12 rounded-full items-center justify-center mr-4" style={{ backgroundColor: item.color + "20" }}>
+                                <View className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: item.color }} />
+                            </View>
+                            <View className="flex-1">
+                                <Text className="text-slate-900 dark:text-white font-bold text-base">{item.name}</Text>
+                                <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">
+                                    {item._count?.transactions || 0} transactions
+                                </Text>
+                            </View>
+                            <View className="flex-row items-center">
+                                <TouchableOpacity onPress={() => openEditModal(item)} className="bg-slate-100 dark:bg-slate-700 rounded-full p-2.5 mr-2">
+                                    <Text className="text-base">✏️</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        Alert.alert("Delete Tag", `Are you sure you want to delete "${item.name}"?`, [
+                                            { text: "Cancel", style: "cancel" },
+                                            { text: "Delete", style: "destructive", onPress: () => deleteMutation.mutate(item.id) },
+                                        ]);
+                                    }}
+                                    className="bg-red-50 dark:bg-red-900/20 rounded-full p-2.5"
+                                >
+                                    <Text className="text-base">🗑️</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
                     keyExtractor={(item) => item.id}
-                    contentContainerStyle={{ paddingBottom: 20, paddingTop: 4 }}
-                    refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={isDark ? "#ff6666" : "#ff3333"} />}
+                    contentContainerStyle={{ paddingBottom: 100, paddingTop: 20 }}
+                    refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#6366f1" />}
                     ListEmptyComponent={
-                        <View className="items-center justify-center py-20">
-                            <Text className="text-3xl mb-2">🏷️</Text>
-                            <Text className="text-neutral-500 dark:text-neutral-400 text-sm text-center">
+                        <View className="items-center justify-center py-20 opacity-50">
+                            <Text className="text-6xl mb-4">🏷️</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-base font-medium text-center">
                                 No tags yet.{"\n"}Create tags to organize your transactions!
                             </Text>
                         </View>
@@ -121,67 +115,71 @@ export default function Tags() {
                 />
             )}
 
-            {/* Modal */}
-            <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={closeModal}>
-                <View className="flex-1 justify-end" style={{ backgroundColor: "rgba(0,0,0,0.6)" }}>
-                    <View className="bg-white dark:bg-neutral-700 rounded-t-3xl p-6 pb-10">
-                        <View className="items-center mb-4">
-                            <View className="w-10 h-1 bg-neutral-200 dark:bg-neutral-600 rounded-full" />
-                        </View>
-                        <Text className="text-black dark:text-white text-lg font-bold mb-6">
-                            {editingTag ? "Edit Tag" : "Create Tag"}
-                        </Text>
+            {/* Floating Action Button for Create */}
+            <TouchableOpacity
+                onPress={openCreateModal}
+                className="absolute bottom-6 right-6 bg-indigo-600 w-16 h-16 rounded-full items-center justify-center shadow-lg shadow-indigo-500/40"
+                activeOpacity={0.9}
+            >
+                <Text className="text-white text-3xl font-light pb-1">+</Text>
+            </TouchableOpacity>
 
-                        <View className="mb-4">
-                            <Text className="text-neutral-500 dark:text-neutral-400 text-sm font-medium mb-2">Tag Name</Text>
-                            <TextInput
-                                className="bg-neutral-100 dark:bg-neutral-600 border border-neutral-200 dark:border-neutral-500 rounded-xl px-4 py-3.5 text-black dark:text-white text-base"
-                                placeholder="e.g., Food, Transport, Salary"
-                                placeholderTextColor={isDark ? "#666666" : "#999999"}
-                                value={name}
-                                onChangeText={setName}
-                            />
+            {/* Modal */}
+            <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={closeModal}>
+                <View className="flex-1 justify-center items-center bg-black/50 backdrop-blur-sm px-4">
+                    <View className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-[32px] p-6 shadow-2xl">
+                        <View className="flex-row justify-between items-center mb-6">
+                            <Text className="text-2xl font-black text-slate-800 dark:text-white">
+                                {editingTag ? "Edit Tag" : "New Tag"}
+                            </Text>
+                            <TouchableOpacity onPress={closeModal} className="bg-slate-100 dark:bg-slate-700 rounded-full p-2">
+                                <Text className="text-slate-500 dark:text-slate-400 font-bold">✕</Text>
+                            </TouchableOpacity>
                         </View>
 
                         <View className="mb-6">
-                            <Text className="text-neutral-500 dark:text-neutral-400 text-sm font-medium mb-3">Color</Text>
-                            <View className="flex-row flex-wrap">
+                            <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-2 ml-1">Name</Text>
+                            <TextInput
+                                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-slate-800 dark:text-white text-lg font-bold"
+                                placeholder="e.g. Groceries"
+                                placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                                value={name}
+                                onChangeText={setName}
+                                autoFocus
+                            />
+                        </View>
+
+                        <View className="mb-8">
+                            <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-3 ml-1">Color</Text>
+                            <View className="flex-row flex-wrap justify-between">
                                 {TAG_COLORS.map((c) => (
                                     <TouchableOpacity
                                         key={c}
                                         onPress={() => setColor(c)}
-                                        className={`w-10 h-10 rounded-xl m-1 items-center justify-center ${color === c ? "border-2 border-black dark:border-white" : ""}`}
+                                        className={`w-12 h-12 rounded-full mb-3 items-center justify-center border-4 ${color === c ? "border-slate-200 dark:border-slate-600 scale-110" : "border-transparent"}`}
                                         style={{ backgroundColor: c }}
-                                        activeOpacity={0.7}
+                                        activeOpacity={0.8}
                                     >
-                                        {color === c && <Text className="text-white text-xs">✓</Text>}
+                                        {color === c && <Text className="text-white text-lg shadow-sm">✓</Text>}
                                     </TouchableOpacity>
                                 ))}
                             </View>
                         </View>
 
-                        <View className="bg-neutral-100 dark:bg-neutral-600 rounded-xl p-3 mb-6 flex-row items-center">
-                            <View className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: color }} />
-                            <Text className="text-black dark:text-white text-sm">{name || "Tag Preview"}</Text>
-                        </View>
-
-                        <View className="flex-row">
-                            <TouchableOpacity onPress={closeModal} className="flex-1 bg-neutral-100 dark:bg-neutral-600 rounded-xl py-3.5 items-center mr-2" activeOpacity={0.8}>
-                                <Text className="text-neutral-500 dark:text-neutral-400 font-semibold">Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={handleSubmit}
-                                disabled={isPending}
-                                className={`flex-1 rounded-xl py-3.5 items-center ml-2 ${isPending ? "bg-primary/50" : "bg-primary"}`}
-                                activeOpacity={0.8}
-                            >
-                                {isPending ? (
-                                    <ActivityIndicator color="#fff" size="small" />
-                                ) : (
-                                    <Text className="text-white font-semibold">{editingTag ? "Update" : "Create"}</Text>
-                                )}
-                            </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity
+                            onPress={handleSubmit}
+                            disabled={isPending}
+                            className={`w-full py-4 rounded-2xl items-center shadow-lg shadow-indigo-500/20 ${isPending || !name.trim() ? "bg-slate-200 dark:bg-slate-700 shadow-none" : "bg-indigo-600"}`}
+                            activeOpacity={0.9}
+                        >
+                            {isPending ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text className={`font-bold text-lg ${isPending || !name.trim() ? "text-slate-400 dark:text-slate-500" : "text-white"}`}>
+                                    {editingTag ? "Save Changes" : "Create Tag"}
+                                </Text>
+                            )}
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>

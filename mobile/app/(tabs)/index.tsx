@@ -10,65 +10,38 @@ import {
     Platform,
     Dimensions,
 } from "react-native";
-import { PieChart } from "../../components/PieChart";
 import { LineChart } from "../../components/LineChart";
+import Svg, { Path } from "react-native-svg";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { useTheme } from "../providers/theme-provider";
+import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, type SummaryResponse, type Transaction } from "../../services/api";
 
-function StatCard({
-    title,
-    amount,
-    color,
-    icon,
-}: {
-    title: string;
-    amount: number;
-    color: string;
-    icon: string;
-}) {
-    const colorMap: Record<string, { bg: string; text: string }> = {
-        green: { bg: "bg-success-500/10", text: "text-success-400" },
-        red: { bg: "bg-danger-500/10", text: "text-danger-400" },
-        blue: { bg: "bg-accent/10 dark:bg-accent-dark/10", text: "text-accent dark:text-accent-dark" },
-    };
-    const { bg, text } = colorMap[color] || colorMap.blue;
 
-    return (
-        <View className={`flex-1 ${bg} border border-border dark:border-border-dark rounded-xl p-4 mx-1`}>
-            <Text className="text-xl mb-1">{icon}</Text>
-            <Text className="text-muted-fg dark:text-muted-fg-dark text-xs font-medium mt-1">{title}</Text>
-            <Text className={`${text} text-lg font-bold mt-1`}>
-                ₹{amount.toFixed(2)}
-            </Text>
-        </View>
-    );
-}
 
 function TransactionItem({ item }: { item: Transaction }) {
     const isIncome = item.type === "INCOME";
     return (
-        <View className="bg-surface dark:bg-surface-dark rounded-xl p-4 mb-3 flex-row items-center border border-border dark:border-border-dark">
+        <View className="bg-white dark:bg-surface-dark rounded-2xl p-4 mb-3 flex-row items-center border border-border dark:border-border-dark shadow-sm">
             <View
-                className={`w-10 h-10 rounded-xl items-center justify-center mr-3 ${isIncome ? "bg-success-500/20" : "bg-danger-500/20"}`}
+                className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-red-50 dark:bg-red-500/10"}`}
             >
-                <Text className="text-lg">{isIncome ? "📈" : "📉"}</Text>
+                <Text className="text-xl">{isIncome ? "💰" : "💳"}</Text>
             </View>
             <View className="flex-1">
-                <Text className="text-black dark:text-white font-semibold text-sm">{item.title}</Text>
-                <Text className="text-muted-fg dark:text-muted-fg-dark text-xs mt-0.5">
+                <Text className="text-slate-900 dark:text-white font-bold text-base">{item.title}</Text>
+                <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">
                     {new Date(item.date).toLocaleDateString("en-IN", {
                         month: "short",
                         day: "numeric",
                     })}
-                    {item.tags.length > 0 && ` · ${item.tags.map((t) => t.name).join(", ")}`}
+                    {item.tags.length > 0 && ` • ${item.tags.map((t) => t.name).join(", ")}`}
                 </Text>
             </View>
-            <Text className={`font-bold text-sm ${isIncome ? "text-success-400" : "text-danger-400"}`}>
+            <Text className={`font-bold text-base ${isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                 {isIncome ? "+" : "-"}₹{item.amount.toFixed(2)}
             </Text>
         </View>
@@ -241,156 +214,162 @@ export default function Dashboard() {
     return (
         <ScrollView
             className="flex-1 bg-background dark:bg-background-dark"
-            contentContainerStyle={{ paddingBottom: 20 }}
+            contentContainerStyle={{ paddingBottom: 100 }}
             refreshControl={
-                <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={isDark ? "#818cf8" : "#4f46e5"} />
+                <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={isDark ? "#818cf8" : "#6366f1"} />
             }
         >
-            {/* Header */}
-            <View className="px-5 pt-4 pb-2 flex-row items-center justify-between">
-                <View>
-                    <Text className="text-muted-fg dark:text-muted-fg-dark text-sm">Welcome back,</Text>
-                    <Text className="text-black dark:text-white text-xl font-bold">
-                        {user?.firstName || "User"} 👋
-                    </Text>
-                </View>
-                <View className="flex-row items-center">
+            {/* Header Section */}
+            <View className="bg-indigo-600 pt-16 pb-8 px-6 rounded-b-[40px] shadow-2xl shadow-indigo-500/30 mb-6">
+                <View className="flex-row items-center justify-between mb-8">
+                    <View>
+                        <Text className="text-indigo-100 text-sm font-semibold uppercase tracking-wider">Total Balance</Text>
+                        <Text className="text-white text-5xl font-black mt-1">₹{summary?.balance.toFixed(2) || "0.00"}</Text>
+                    </View>
                     <TouchableOpacity
-                        onPress={() => signOut()}
-                        className="bg-muted dark:bg-muted-dark border border-border dark:border-border-dark rounded-xl px-4 py-2"
+                        onPress={() => {
+                            Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "Sign Out", style: "destructive", onPress: () => signOut() },
+                            ]);
+                        }}
+                        className="bg-white/20 p-3 rounded-full backdrop-blur-md items-center justify-center"
+                        accessibilityLabel="Sign Out"
                     >
-                        <Text className="text-muted-fg dark:text-muted-fg-dark text-xs font-medium">Sign Out</Text>
+                        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <Path d="M16 17l5-5-5-5" />
+                            <Path d="M21 12H9" />
+                        </Svg>
                     </TouchableOpacity>
                 </View>
+
+                {/* Quick Stats Overlay (Income/Expense) */}
+                <View className="flex-row space-x-4">
+                    <View className="flex-1 bg-white/10 p-4 rounded-3xl flex-row items-center border border-white/5 backdrop-blur-lg">
+                        <View className="w-10 h-10 rounded-full bg-emerald-400/20 items-center justify-center mr-3">
+                            <Text className="text-emerald-300 text-sm">▼</Text>
+                        </View>
+                        <View>
+                            <Text className="text-indigo-100 text-xs font-semibold">Income</Text>
+                            <Text className="text-white text-xl font-bold">₹{summary?.totalIncome.toFixed(0)}</Text>
+                        </View>
+                    </View>
+                    <View className="flex-1 bg-white/10 p-4 rounded-3xl flex-row items-center border border-white/5 backdrop-blur-lg">
+                        <View className="w-10 h-10 rounded-full bg-red-400/20 items-center justify-center mr-3">
+                            <Text className="text-red-300 text-sm">▲</Text>
+                        </View>
+                        <View>
+                            <Text className="text-indigo-100 text-xs font-semibold">Expense</Text>
+                            <Text className="text-white text-xl font-bold">₹{summary?.totalExpense.toFixed(0)}</Text>
+                        </View>
+                    </View>
+                </View>
             </View>
 
-            {/* Stats */}
-            <View className="flex-row px-4 mt-4">
-                <StatCard title="Income" amount={summary?.totalIncome || 0} color="green" icon="💰" />
-                <StatCard title="Expenses" amount={summary?.totalExpense || 0} color="red" icon="💸" />
-                <StatCard title="Balance" amount={summary?.balance || 0} color="blue" icon="🏦" />
-            </View>
+            {/* Main Content */}
+            <View className="px-5">
 
-            {/* Download PDF */}
-            <View className="px-5 mt-5">
+                {/* PDF Download Button */}
                 <TouchableOpacity
                     onPress={handleDownloadPdf}
                     disabled={pdfLoading}
-                    className="bg-muted dark:bg-muted-dark border-2 border-border dark:border-border-dark rounded-xl py-3.5 flex-row items-center justify-center"
+                    className="bg-white dark:bg-surface-dark shadow-sm border border-border dark:border-border-dark rounded-2xl py-4 flex-row items-center justify-center mb-6"
                     activeOpacity={0.7}
                 >
                     {pdfLoading ? (
-                        <ActivityIndicator size="small" color={isDark ? "#818cf8" : "#4f46e5"} />
+                        <ActivityIndicator size="small" color={isDark ? "#818cf8" : "#6366f1"} />
                     ) : (
                         <>
-                            <Text className="text-base mr-2">📄</Text>
-                            <Text className="text-black dark:text-white font-semibold text-sm">
-                                Download All Transactions (PDF)
+                            <Text className="text-xl mr-2">📄</Text>
+                            <Text className="text-slate-700 dark:text-slate-200 font-bold text-sm">
+                                Download Report
                             </Text>
                         </>
                     )}
                 </TouchableOpacity>
-            </View>
 
-            {/* Income vs Expenses Graph */}
-            <View className="px-5 mt-6">
-                <View className="flex-row items-center justify-between mb-3">
-                    <Text className="text-black dark:text-white text-base font-bold">Financial Trend</Text>
-                    {/* Time Range Selector */}
-                    <View className="flex-row bg-neutral-100 dark:bg-neutral-800 rounded-lg p-0.5">
-                        {(["1W", "1M", "3M", "1Y", "All"] as const).map((r) => (
-                            <TouchableOpacity
-                                key={r}
-                                onPress={() => setRange(r)}
-                                className={`px-2 py-1 rounded-md ${range === r ? "bg-white dark:bg-neutral-600 shadow-sm" : ""}`}
-                            >
-                                <Text className={`text-[10px] font-semibold ${range === r ? "text-black dark:text-white" : "text-neutral-500"}`}>
-                                    {r}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
+                {/* Financial Trend Chart */}
+                <View className="bg-white dark:bg-surface-dark rounded-3xl p-5 shadow-sm border border-border dark:border-border-dark mb-6">
+                    <View className="flex-row items-center justify-between mb-4">
+                        <Text className="text-slate-800 dark:text-white text-lg font-bold">Analysis</Text>
+                        {/* Simple Time Range */}
+                        <View className="flex-row bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                            {(["1W", "1M", "1Y"] as const).map((r) => (
+                                <TouchableOpacity
+                                    key={r}
+                                    onPress={() => setRange(r)}
+                                    className={`px-3 py-1.5 rounded-md ${range === r ? "bg-white dark:bg-slate-600 shadow-sm" : ""}`}
+                                >
+                                    <Text className={`text-xs font-bold ${range === r ? "text-primary dark:text-primary-dark" : "text-slate-400"}`}>
+                                        {r}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+
+                    <View className="items-center overflow-hidden">
+                        {summary?.chartData && summary.chartData.length > 0 ? (
+                            <LineChart
+                                datasets={[
+                                    { data: incomeData, color: "#10b981" },
+                                    { data: expenseData, color: "#ef4444" },
+                                ]}
+                                labels={chartDates}
+                                width={Dimensions.get("window").width - 80}
+                                height={200}
+                                isDark={isDark}
+                            />
+                        ) : (
+                            <View className="h-40 items-center justify-center w-full bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                                <Text className="text-slate-400 text-sm">No data available</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
-                <View className="items-center bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-xl py-4 overflow-hidden">
-                    {summary?.chartData && summary.chartData.length > 0 ? (
-                        <LineChart
-                            datasets={[
-                                { data: incomeData, color: "#22c55e" },
-                                { data: expenseData, color: "#ef4444" },
-                            ]}
-                            labels={chartDates}
-                            width={Dimensions.get("window").width - 40}
-                            height={220}
-                            isDark={isDark}
-                        />
+
+                {/* Tag Breakdown */}
+                {summary?.tagBreakdown && summary.tagBreakdown.length > 0 && (
+                    <View className="mb-6">
+                        <Text className="text-slate-800 dark:text-white text-lg font-bold mb-4 ml-1">Spending</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="pb-2">
+                            {summary.tagBreakdown.map((tag) => (
+                                <View key={tag.id} className="bg-white dark:bg-surface-dark mr-3 p-4 rounded-2xl border border-border dark:border-border-dark shadow-sm min-w-[140px]">
+                                    <View className="flex-row items-center mb-3">
+                                        <View className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: tag.color }} />
+                                        <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase" numberOfLines={1}>{tag.name}</Text>
+                                    </View>
+                                    <Text className="text-slate-800 dark:text-white text-xl font-bold">₹{tag.totalSpent.toFixed(0)}</Text>
+                                    <Text className="text-slate-400 text-xs mt-1">{tag.count} txns</Text>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
+
+                {/* Recent Transactions */}
+                <View>
+                    <View className="flex-row items-center justify-between mb-4">
+                        <Text className="text-slate-800 dark:text-white text-lg font-bold ml-1">Recent Activity</Text>
+                        <TouchableOpacity onPress={() => router.push("/(tabs)/transactions")}>
+                            <Text className="text-primary dark:text-primary-dark text-sm font-semibold">See All</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {summary?.recentTransactions && summary.recentTransactions.length > 0 ? (
+                        summary.recentTransactions.map((transaction) => (
+                            <TransactionItem key={transaction.id} item={transaction} />
+                        ))
                     ) : (
-                        <View className="h-40 items-center justify-center">
-                            <Text className="text-neutral-400 text-xs">No chart data for this period</Text>
+                        <View className="bg-white dark:bg-surface-dark border border-border border-dashed dark:border-border-dark rounded-2xl p-8 items-center justify-center">
+                            <Text className="text-4xl mb-3 opacity-50">📝</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium text-center">
+                                No transactions yet.{"\n"}Start tracking your expenses!
+                            </Text>
                         </View>
                     )}
                 </View>
-                <View className="flex-row justify-center mt-2 space-x-4">
-                    <View className="flex-row items-center mr-4">
-                        <View className="w-2 h-2 rounded-full bg-success-500 mr-1" />
-                        <Text className="text-xs text-neutral-500">Income</Text>
-                    </View>
-                    <View className="flex-row items-center">
-                        <View className="w-2 h-2 rounded-full bg-danger-500 mr-1" />
-                        <Text className="text-xs text-neutral-500">Expenses</Text>
-                    </View>
-                </View>
-            </View>
-
-            {/* Tag Breakdown */}
-            {summary?.tagBreakdown && summary.tagBreakdown.length > 0 && (
-                <View className="px-5 mt-6">
-                    <Text className="text-black dark:text-white text-base font-bold mb-3">Spending Breakdown</Text>
-                    <View className="items-center mb-6 bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-xl py-4">
-                        <PieChart
-                            data={summary.tagBreakdown.map((tag) => ({
-                                name: tag.name,
-                                value: tag.totalSpent,
-                                color: tag.color,
-                            }))}
-                            radius={90}
-                            containerWidth={Dimensions.get("window").width - 40}
-                            isDark={isDark}
-                        />
-                    </View>
-                    <Text className="text-black dark:text-white text-base font-bold mb-3">Spending by Tag Details</Text>
-                    <View className="bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-xl p-4">
-                        {summary.tagBreakdown.map((tag) => (
-                            <View key={tag.id} className="flex-row items-center mb-3 last:mb-0">
-                                <View className="w-3 h-3 rounded-full mr-3" style={{ backgroundColor: tag.color }} />
-                                <Text className="text-black dark:text-white flex-1 text-sm">{tag.name}</Text>
-                                <Text className="text-muted-fg dark:text-muted-fg-dark text-sm font-medium">₹{tag.totalSpent.toFixed(2)}</Text>
-                                <Text className="text-muted-fg dark:text-muted-fg-dark text-xs ml-2">({tag.count})</Text>
-                            </View>
-                        ))}
-                    </View>
-                </View>
-            )}
-
-            {/* Recent Transactions */}
-            <View className="px-5 mt-6">
-                <View className="flex-row items-center justify-between mb-3">
-                    <Text className="text-black dark:text-white text-base font-bold">Recent Transactions</Text>
-                    <TouchableOpacity onPress={() => router.push("/(tabs)/transactions")}>
-                        <Text className="text-primary dark:text-primary-dark text-xs font-semibold">View All</Text>
-                    </TouchableOpacity>
-                </View>
-                {summary?.recentTransactions && summary.recentTransactions.length > 0 ? (
-                    summary.recentTransactions.map((transaction) => (
-                        <TransactionItem key={transaction.id} item={transaction} />
-                    ))
-                ) : (
-                    <View className="bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-xl p-8 items-center">
-                        <Text className="text-3xl mb-2">📝</Text>
-                        <Text className="text-muted-fg dark:text-muted-fg-dark text-sm text-center">
-                            No transactions yet.{"\n"}Tap "Add" to get started!
-                        </Text>
-                    </View>
-                )}
             </View>
         </ScrollView>
     );

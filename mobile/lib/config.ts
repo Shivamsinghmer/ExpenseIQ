@@ -1,7 +1,9 @@
 // Environment-based API configuration
-const DEV_API_URL = "http://10.0.2.2:3001"; // Android emulator
-const PROD_API_URL = "https://your-api.railway.app"; // Replace with your deployed URL
+const EMULATOR_API_URL = "http://10.0.2.2:3001"; // Android Emulator
+const PHYSICAL_DEVICE_API_URL = "http://10.118.246.39:3001"; // YOUR LOCAL IP for Physical Device
+const PROD_API_URL = "https://expense-iq-one.vercel.app"; // Production URL
 
-export const API_BASE_URL = __DEV__ ? DEV_API_URL : PROD_API_URL;
+// Toggle this manually or use __DEV__ if available in your environment
+export const API_BASE_URL = PHYSICAL_DEVICE_API_URL;
 
 export const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || "";

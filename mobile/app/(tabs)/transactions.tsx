@@ -4,15 +4,15 @@ import {
     ActivityIndicator, Alert, TextInput,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTheme } from "../providers/theme-provider";
+import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, type Transaction, type TransactionListResponse } from "../../services/api";
 
 function TransactionCard({ item, onDelete }: { item: Transaction; onDelete: (id: string) => void }) {
     const isIncome = item.type === "INCOME";
     return (
         <TouchableOpacity
-            className="bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-xl p-4 mb-3 mx-5"
-            activeOpacity={0.8}
+            className="bg-white dark:bg-surface-dark border border-border dark:border-border-dark rounded-2xl p-4 mb-3 shadow-sm"
+            activeOpacity={0.7}
             onLongPress={() => {
                 Alert.alert("Delete Transaction", `Are you sure you want to delete "${item.title}"?`, [
                     { text: "Cancel", style: "cancel" },
@@ -20,31 +20,41 @@ function TransactionCard({ item, onDelete }: { item: Transaction; onDelete: (id:
                 ]);
             }}
         >
-            <View className="flex-row items-start">
-                <View className={`w-11 h-11 rounded-xl items-center justify-center mr-3 ${isIncome ? "bg-success-500/15" : "bg-danger-500/15"}`}>
-                    <Text className="text-xl">{isIncome ? "📈" : "📉"}</Text>
+            <View className="flex-row items-center">
+                <View className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-red-50 dark:bg-red-500/10"}`}>
+                    <Text className="text-xl">{isIncome ? "💰" : "💳"}</Text>
                 </View>
                 <View className="flex-1">
-                    <Text className="text-black dark:text-white font-semibold text-sm">{item.title}</Text>
-                    <Text className="text-neutral-500 dark:text-neutral-400 text-xs mt-1">
-                        {new Date(item.date).toLocaleDateString("en-IN", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                    <Text className="text-slate-900 dark:text-white font-bold text-base">{item.title}</Text>
+                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">
+                        {new Date(item.date).toLocaleDateString("en-IN", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric"
+                        })}
                     </Text>
                     {item.tags.length > 0 && (
                         <View className="flex-row flex-wrap mt-2">
                             {item.tags.map((tag) => (
-                                <View key={tag.id} className="flex-row items-center bg-neutral-100 dark:bg-neutral-600 rounded-full px-2.5 py-0.5 mr-1 mb-1">
-                                    <View className="w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: tag.color }} />
-                                    <Text className="text-neutral-500 dark:text-neutral-300 text-[10px]">{tag.name}</Text>
+                                <View key={tag.id} className="flex-row items-center bg-slate-100 dark:bg-slate-800 rounded-md px-2 py-1 mr-1.5 mt-1">
+                                    <View className="w-1.5 h-1.5 rounded-full mr-1.5" style={{ backgroundColor: tag.color }} />
+                                    <Text className="text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase">{tag.name}</Text>
                                 </View>
                             ))}
                         </View>
                     )}
-                    {item.notes ? <Text className="text-neutral-400 text-xs mt-1 italic">{item.notes}</Text> : null}
                 </View>
-                <Text className={`font-bold text-base ${isIncome ? "text-success-400" : "text-danger-400"}`}>
-                    {isIncome ? "+" : "-"}₹{item.amount.toFixed(2)}
-                </Text>
+                <View className="items-end">
+                    <Text className={`font-black text-base ${isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                        {isIncome ? "+" : "-"}₹{item.amount.toFixed(2)}
+                    </Text>
+                </View>
             </View>
+            {item.notes && (
+                <View className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <Text className="text-slate-400 text-xs italic">"{item.notes}"</Text>
+                </View>
+            )}
         </TouchableOpacity>
     );
 }
@@ -75,72 +85,64 @@ export default function Transactions() {
     });
 
     return (
-        <View className="flex-1 bg-white dark:bg-black">
-            {/* Search */}
-            <View className="px-5 pt-3 pb-2">
-                <TextInput
-                    className="bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-xl px-4 py-3 text-black dark:text-white text-sm"
-                    placeholder="Search transactions..."
-                    placeholderTextColor={isDark ? "#666666" : "#999999"}
-                    value={search}
-                    onChangeText={(val) => { setSearch(val); setPage(1); }}
-                />
-            </View>
+        <View className="flex-1 bg-background dark:bg-background-dark">
+            {/* Search & Filter Container */}
+            <View className="px-5 pt-4 pb-4 bg-background dark:bg-background-dark z-10">
+                <View className="flex-row items-center bg-white dark:bg-surface-dark border border-border dark:border-border-dark rounded-2xl px-4 py-3 mb-4 shadow-sm">
+                    <Text className="text-lg mr-2">🔍</Text>
+                    <TextInput
+                        className="flex-1 text-base text-slate-900 dark:text-white font-medium"
+                        placeholder="Search transactions..."
+                        placeholderTextColor={isDark ? "#94a3b8" : "#cbd5e1"}
+                        value={search}
+                        onChangeText={(val) => { setSearch(val); setPage(1); }}
+                        selectionColor="#6366f1"
+                    />
+                    {search.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearch("")}>
+                            <Text className="text-slate-400">✕</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
 
-            {/* Filter Bar */}
-            <View className="flex-row px-5 mb-3">
-                {(["ALL", "INCOME", "EXPENSE"] as const).map((f) => (
-                    <TouchableOpacity
-                        key={f}
-                        onPress={() => { setFilter(f); setPage(1); }}
-                        className={`mr-2 px-4 py-2 rounded-xl ${filter === f ? "bg-primary" : "bg-neutral-100 dark:bg-neutral-700"}`}
-                        activeOpacity={0.7}
-                    >
-                        <Text className={`text-xs font-semibold ${filter === f ? "text-white" : "text-neutral-500 dark:text-neutral-400"}`}>
-                            {f === "ALL" ? "All" : f === "INCOME" ? "💰 Income" : "💸 Expense"}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+                {/* Filter Tabs */}
+                <View className="flex-row bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                    {(["ALL", "INCOME", "EXPENSE"] as const).map((f) => {
+                        const isActive = filter === f;
+                        return (
+                            <TouchableOpacity
+                                key={f}
+                                onPress={() => { setFilter(f); setPage(1); }}
+                                className={`flex-1 py-2.5 rounded-lg items-center justify-center ${isActive ? "bg-white dark:bg-surface-dark shadow-sm" : ""}`}
+                                activeOpacity={0.7}
+                            >
+                                <Text className={`text-xs font-bold ${isActive ? "text-primary dark:text-primary-dark" : "text-slate-500 dark:text-slate-400"}`}>
+                                    {f === "ALL" ? "All" : f === "INCOME" ? "Income" : "Expense"}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
             </View>
 
             {/* List */}
             {isLoading ? (
                 <View className="flex-1 items-center justify-center">
-                    <ActivityIndicator size="large" color={isDark ? "#ff6666" : "#ff3333"} />
+                    <ActivityIndicator size="large" color="#6366f1" />
                 </View>
             ) : (
                 <FlatList
                     data={data?.transactions || []}
                     renderItem={({ item }) => <TransactionCard item={item} onDelete={(id) => deleteMutation.mutate(id)} />}
                     keyExtractor={(item) => item.id}
-                    contentContainerStyle={{ paddingBottom: 20 }}
-                    refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={isDark ? "#ff6666" : "#ff3333"} />}
+                    contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#6366f1" />}
                     ListEmptyComponent={
-                        <View className="items-center justify-center py-20">
-                            <Text className="text-3xl mb-2">📭</Text>
-                            <Text className="text-neutral-500 dark:text-neutral-400 text-sm">No transactions found</Text>
+                        <View className="items-center justify-center py-20 opacity-50">
+                            <Text className="text-6xl mb-4">📭</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 text-base font-medium">No transactions found</Text>
                         </View>
-                    }
-                    ListFooterComponent={
-                        data && data.pagination.totalPages > 1 ? (
-                            <View className="flex-row justify-center items-center py-4">
-                                <TouchableOpacity
-                                    onPress={() => setPage((p) => Math.max(1, p - 1))}
-                                    disabled={page === 1}
-                                    className={`px-4 py-2 rounded-xl ${page === 1 ? "bg-neutral-100 dark:bg-neutral-700" : "bg-primary"}`}
-                                >
-                                    <Text className={page === 1 ? "text-neutral-400 text-xs" : "text-white text-xs"}>Previous</Text>
-                                </TouchableOpacity>
-                                <Text className="text-neutral-500 dark:text-neutral-400 text-xs mx-4">{page} / {data.pagination.totalPages}</Text>
-                                <TouchableOpacity
-                                    onPress={() => setPage((p) => Math.min(data.pagination.totalPages, p + 1))}
-                                    disabled={page === data.pagination.totalPages}
-                                    className={`px-4 py-2 rounded-xl ${page === data.pagination.totalPages ? "bg-neutral-100 dark:bg-neutral-700" : "bg-primary"}`}
-                                >
-                                    <Text className={page === data.pagination.totalPages ? "text-neutral-400 text-xs" : "text-white text-xs"}>Next</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : null
                     }
                 />
             )}
