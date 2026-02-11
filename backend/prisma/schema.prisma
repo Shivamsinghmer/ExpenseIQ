@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+model User {
+  id           String        @id @default(cuid())
+  clerkUserId  String        @unique
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+  tags         Tag[]
+}
+
+model Transaction {
+  id        String          @id @default(cuid())
+  title     String
+  amount    Float
+  type      TransactionType
+  notes     String?
+  date      DateTime
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags      Tag[]           @relation("TransactionTags")
+  createdAt DateTime        @default(now())
+
+  @@index([userId])
+  @@index([date])
+  @@index([type])
+}
+
+model Tag {
+  id           String        @id @default(cuid())
+  name         String
+  color        String
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[] @relation("TransactionTags")
+
+  @@unique([name, userId])
+  @@index([userId])
+}
