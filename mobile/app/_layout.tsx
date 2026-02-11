@@ -1,9 +1,9 @@
 import React from "react";
-import { Slot } from "expo-router";
+import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { AuthProvider } from "./providers/auth-provider";
-import { QueryProvider } from "./providers/query-provider";
-import { ThemeProvider, useTheme } from "./providers/theme-provider";
+import { AuthProvider } from "../providers/auth-provider";
+import { QueryProvider } from "../providers/query-provider";
+import { ThemeProvider, useTheme } from "../providers/theme-provider";
 import "../global.css";
 
 function StatusBarWrapper() {
@@ -17,7 +17,7 @@ export default function RootLayout() {
             <QueryProvider>
                 <ThemeProvider>
                     <StatusBarWrapper />
-                    <Slot />
+                    <Stack screenOptions={{ headerShown: false }} />
                 </ThemeProvider>
             </QueryProvider>
         </AuthProvider>

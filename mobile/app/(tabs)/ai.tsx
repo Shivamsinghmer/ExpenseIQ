@@ -4,7 +4,7 @@ import {
     ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
 } from "react-native";
 import { useMutation } from "@tanstack/react-query";
-import { useTheme } from "../providers/theme-provider";
+import { useTheme } from "../../providers/theme-provider";
 import { aiAPI, type AIResponse } from "../../services/api";
 
 interface ChatMessage {
@@ -90,34 +90,28 @@ export default function AIChatbot() {
     const renderMessage = ({ item }: { item: ChatMessage }) => {
         const isUser = item.role === "user";
         return (
-            <View className={`mb-3 px-5 ${isUser ? "items-end" : "items-start"}`}>
+            <View className={`mb-4 mx-4 flex-row ${isUser ? "justify-end" : "justify-start"}`}>
+                {!isUser && (
+                    <View className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 items-center justify-center mr-2 self-end mb-1">
+                        <Text className="text-sm">🤖</Text>
+                    </View>
+                )}
                 <View
-                    className={`max-w-[85%] rounded-2xl p-4 ${isUser
-                        ? "bg-primary rounded-br-none"
-                        : "bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-bl-none"
+                    className={`max-w-[80%] rounded-2xl px-5 py-3.5 shadow-sm ${isUser
+                        ? "bg-indigo-600 rounded-br-sm"
+                        : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-bl-sm"
                         }`}
                 >
-                    {!isUser && (
-                        <View className="flex-row items-center mb-2">
-                            <Text className="text-sm mr-1.5">🤖</Text>
-                            <Text className="text-primary dark:text-primary-lt text-xs font-bold">ExpenseIQ AI</Text>
-                        </View>
-                    )}
-                    <Text className={`text-sm leading-5 ${isUser ? "text-white" : "text-black dark:text-white"}`}>
+                    <Text className={`text-base leading-6 ${isUser ? "text-white font-medium" : "text-slate-800 dark:text-slate-100"}`}>
                         {item.content}
                     </Text>
                     {item.dataContext && (
-                        <View className="mt-2 pt-2 border-t border-neutral-200 dark:border-neutral-600">
-                            <Text className="text-neutral-500 dark:text-neutral-400 text-[10px]">
-                                📊 Based on {item.dataContext.transactionCount} transactions
-                                {item.dataContext.dateRange.from !== "all time" &&
-                                    ` • ${item.dataContext.dateRange.from.split("T")[0]} to ${item.dataContext.dateRange.to.split("T")[0]}`}
+                        <View className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700">
+                            <Text className="text-slate-400 dark:text-slate-500 text-[10px] uppercase font-bold tracking-wider">
+                                📊 Analysis • {item.dataContext.transactionCount} transactions
                             </Text>
                         </View>
                     )}
-                    <Text className={`text-[10px] mt-1.5 ${isUser ? "text-white/60" : "text-neutral-400"}`}>
-                        {item.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </Text>
                 </View>
             </View>
         );
@@ -126,66 +120,67 @@ export default function AIChatbot() {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            className="flex-1 bg-white dark:bg-black"
+            className="flex-1 bg-slate-50 dark:bg-slate-900"
             keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
         >
-            <View className="flex-row justify-end px-5 py-3 border-b border-neutral-100 dark:border-neutral-800">
+            <View className="flex-row justify-between items-center px-6 py-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-10 border-b border-slate-100 dark:border-slate-800">
+                <View>
+                    <Text className="text-lg font-black text-slate-800 dark:text-white">AI Assistant</Text>
+                    <Text className="text-xs text-slate-500 dark:text-slate-400 font-medium">Ask about your finances</Text>
+                </View>
                 <TouchableOpacity
                     onPress={confirmReset}
-                    className="bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 px-4 py-2 rounded-full flex-row items-center"
+                    className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full"
                     activeOpacity={0.7}
                 >
-                    <Text className="text-xs font-semibold text-black dark:text-white mr-1">✨ New Chat</Text>
+                    <Text className="text-lg">🧹</Text>
                 </TouchableOpacity>
             </View>
+
             <FlatList
                 ref={flatListRef}
                 data={messages}
                 renderItem={renderMessage}
                 keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingTop: 10, paddingBottom: 10 }}
+                contentContainerStyle={{ paddingTop: 20, paddingBottom: 20 }}
                 onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                 ListFooterComponent={
                     askMutation.isPending ? (
-                        <View className="items-start px-5 mb-3">
-                            <View className="bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-2xl rounded-bl-none p-4">
-                                <View className="flex-row items-center">
-                                    <ActivityIndicator size="small" color={isDark ? "#ff6666" : "#ff3333"} />
-                                    <Text className="text-neutral-500 dark:text-neutral-400 text-xs ml-2">Analyzing your data...</Text>
-                                </View>
+                        <View className="flex-row items-center ml-14 mb-4">
+                            <View className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 flex-row items-center shadow-sm">
+                                <ActivityIndicator size="small" color="#6366f1" />
+                                <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium ml-2">Thinking...</Text>
                             </View>
                         </View>
                     ) : null
                 }
             />
 
-            {messages.length <= 2 && (
-                <View className="px-5 pb-2">
-                    <FlatList
-                        horizontal
-                        data={SUGGESTIONS}
-                        renderItem={({ item }) => (
+            {messages.length <= 1 && (
+                <View className="px-6 pb-4">
+                    <Text className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-wider mb-3 ml-1">Suggestions</Text>
+                    <View className="flex-row flex-wrap">
+                        {SUGGESTIONS.map((s) => (
                             <TouchableOpacity
-                                onPress={() => handleSend(item)}
-                                className="bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 rounded-xl px-4 py-2 mr-2"
+                                key={s}
+                                onPress={() => handleSend(s)}
+                                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 mr-2 mb-2 shadow-sm active:bg-slate-50"
                                 activeOpacity={0.7}
                             >
-                                <Text className="text-neutral-500 dark:text-neutral-400 text-xs">{item}</Text>
+                                <Text className="text-slate-600 dark:text-slate-300 text-xs font-semibold">{s}</Text>
                             </TouchableOpacity>
-                        )}
-                        keyExtractor={(item) => item}
-                        showsHorizontalScrollIndicator={false}
-                    />
+                        ))}
+                    </View>
                 </View>
             )}
 
             {/* Input */}
-            <View className="border-t border-neutral-200 dark:border-neutral-600 px-5 py-3 bg-neutral-50 dark:bg-neutral-700">
-                <View className="flex-row items-end">
+            <View className="px-5 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 pb-8">
+                <View className="flex-row items-end bg-slate-100 dark:bg-slate-800 rounded-[24px] p-1.5 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 transition-colors">
                     <TextInput
-                        className="flex-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-xl px-4 py-3 text-black dark:text-white text-sm mr-3 max-h-[100px]"
-                        placeholder="Ask about your finances..."
-                        placeholderTextColor={isDark ? "#666666" : "#999999"}
+                        className="flex-1 px-4 py-3 text-slate-800 dark:text-white text-base max-h-[120px]"
+                        placeholder="Type a message..."
+                        placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
                         value={input}
                         onChangeText={setInput}
                         multiline
@@ -196,10 +191,10 @@ export default function AIChatbot() {
                     <TouchableOpacity
                         onPress={() => handleSend()}
                         disabled={!input.trim() || askMutation.isPending}
-                        className={`w-11 h-11 rounded-xl items-center justify-center ${input.trim() && !askMutation.isPending ? "bg-primary" : "bg-neutral-200 dark:bg-neutral-600"}`}
+                        className={`w-10 h-10 rounded-full items-center justify-center mb-1 mr-1 ${input.trim() && !askMutation.isPending ? "bg-indigo-600 shadow-md shadow-indigo-200" : "bg-slate-300 dark:bg-slate-700"}`}
                         activeOpacity={0.8}
                     >
-                        <Text className={input.trim() && !askMutation.isPending ? "text-white text-base" : "text-neutral-400 text-base"}>↑</Text>
+                        <Text className="text-white text-lg font-bold">↑</Text>
                     </TouchableOpacity>
                 </View>
             </View>

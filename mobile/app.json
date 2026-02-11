@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.expenseiq.app"
+      "bundleIdentifier": "com.expenseiq.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,6 +35,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "74364ead-60a0-4e55-9ebd-cc8f6adc6b9d"
+      }
+    },
+    "owner": "shivammer"
   }
 }
