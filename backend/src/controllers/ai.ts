@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { z } from "zod";
 import prisma from "../services/prisma";
-import { getAIResponse } from "../services/gemini";
+import { getAIResponse } from "../services/groq";
 import { AuthenticatedRequest } from "../middleware/auth";
 
 const questionSchema = z.object({
@@ -103,12 +103,25 @@ export async function askQuestion(
     res: Response
 ): Promise<void> {
     try {
+        console.log(`AI Controller: Processing question for Clerk User: ${req.clerkUserId}`);
         const user = await getOrCreateUser(req.clerkUserId!);
+        console.log(`AI Controller: Database User ID: ${user.id}`);
+
         const { question } = questionSchema.parse(req.body);
+        console.log(`AI Controller: Question: "${question}"`);
+
+        // Save user message
+        await prisma.chatMessage.create({
+            data: {
+                content: question,
+                role: "user",
+                userId: user.id
+            }
+        });
 
         // Parse intent from the question
         const intent = parseIntent(question);
-
+        console.log("AI Controller: Parsed intent:", intent);
         // Build query filters
         const where: Record<string, any> = { userId: user.id };
         if (intent.type) where.type = intent.type;
@@ -147,7 +160,7 @@ export async function askQuestion(
             }),
         ]);
 
-        // Structure data for Gemini
+        // Structure data for context
         const financialData = {
             summary: {
                 totalIncome: incomeAgg._sum.amount || 0,
@@ -181,8 +194,24 @@ export async function askQuestion(
             })),
         };
 
+        console.log("AI Controller: Data context summary:", {
+            transactionCount: financialData.transactions.length,
+            tagCount: financialData.tagBreakdown.length,
+        });
+
         // Get AI response
+        console.log("AI Controller: Calling Groq service...");
         const aiResponse = await getAIResponse(question, financialData);
+        console.log("AI Controller: Groq response received successfully.");
+
+        // Save AI response
+        await prisma.chatMessage.create({
+            data: {
+                content: aiResponse,
+                role: "assistant",
+                userId: user.id
+            }
+        });
 
         res.json({
             question,
@@ -192,12 +221,54 @@ export async function askQuestion(
                 dateRange: financialData.dateRange,
             },
         });
-    } catch (error) {
+    } catch (error: any) {
         if (error instanceof z.ZodError) {
             res.status(400).json({ error: "Validation failed", details: error.issues });
             return;
         }
-        console.error("AI question error:", error);
-        res.status(500).json({ error: "Failed to process question" });
+
+        console.error("AI question controller error:", error);
+        res.status(500).json({
+            error: "Failed to process question",
+            message: error.message,
+        });
+    }
+}
+
+// GET Chat history
+export async function getChatHistory(
+    req: AuthenticatedRequest,
+    res: Response
+): Promise<void> {
+    try {
+        const user = await getOrCreateUser(req.clerkUserId!);
+        const messages = await prisma.chatMessage.findMany({
+            where: { userId: user.id },
+            orderBy: { createdAt: "asc" },
+            take: 50,
+        });
+
+        res.json(messages);
+    } catch (error: any) {
+        console.error("Fetch chat history error:", error);
+        res.status(500).json({ error: "Failed to fetch chat history" });
+    }
+}
+
+// DELETE Chat history
+export async function clearChatHistory(
+    req: AuthenticatedRequest,
+    res: Response
+): Promise<void> {
+    try {
+        const user = await getOrCreateUser(req.clerkUserId!);
+        await prisma.chatMessage.deleteMany({
+            where: { userId: user.id }
+        });
+
+        res.json({ message: "Chat history cleared" });
+    } catch (error: any) {
+        console.error("Clear chat history error:", error);
+        res.status(500).json({ error: "Failed to clear chat history" });
     }
 }

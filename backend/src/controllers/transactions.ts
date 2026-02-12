@@ -260,27 +260,37 @@ export async function getSummary(req: AuthenticatedRequest, res: Response): Prom
         const totalIncome = incomeAgg._sum.amount || 0;
         const totalExpense = expenseAgg._sum.amount || 0;
 
-        // Process chart data
-        const chartMap = new Map<string, { income: number; expense: number }>();
+        const chartData: { date: string; income: number; expense: number }[] = [];
 
-        // Initialize chart data based on transactions or just sparse?
-        // Sparse is fine for Line Chart, but line chart looks better with continuity.
-        // For simplicity, we return sparse data and let frontend handle or fill gaps.
-        allTx.forEach(t => {
-            const dateStr = t.date.toISOString().split("T")[0];
-            if (!chartMap.has(dateStr)) {
-                chartMap.set(dateStr, { income: 0, expense: 0 });
+        if (allTx.length > 0) {
+            const start = new Date(startDate ? (startDate as string) : allTx[0].date);
+            const end = new Date(endDate ? (endDate as string) : new Date());
+
+            const current = new Date(start);
+            current.setHours(0, 0, 0, 0);
+            const last = new Date(end);
+            last.setHours(0, 0, 0, 0);
+
+            const txMap = new Map<string, { income: number; expense: number }>();
+            allTx.forEach(t => {
+                const d = t.date.toISOString().split("T")[0];
+                if (!txMap.has(d)) txMap.set(d, { income: 0, expense: 0 });
+                const entry = txMap.get(d)!;
+                if (t.type === "INCOME") entry.income += t.amount;
+                else entry.expense += t.amount;
+            });
+
+            while (current <= last) {
+                const dateStr = current.toISOString().split("T")[0];
+                const data = txMap.get(dateStr) || { income: 0, expense: 0 };
+                chartData.push({
+                    date: dateStr,
+                    income: data.income,
+                    expense: data.expense
+                });
+                current.setDate(current.getDate() + 1);
             }
-            const entry = chartMap.get(dateStr)!;
-            if (t.type === "INCOME") entry.income += t.amount;
-            else entry.expense += t.amount;
-        });
-
-        const chartData = Array.from(chartMap.entries()).map(([date, data]) => ({
-            date,
-            income: data.income,
-            expense: data.expense
-        }));
+        }
 
         res.json({
             totalIncome,

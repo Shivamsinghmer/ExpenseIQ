@@ -46,10 +46,20 @@ Provide a helpful, fact-based response using ONLY the data above.`;
 
         const result = await model.generateContent(prompt);
         const response = result.response;
+
+        // Safety check: check if the response was blocked
+        if (response.candidates && response.candidates[0]?.finishReason === "SAFETY") {
+            return "I'm sorry, I can't answer that because it was flagged by safety filters. Please try asking a different financial question.";
+        }
+
         return response.text();
-    } catch (error) {
+    } catch (error: any) {
         console.error("Gemini API error:", error);
-        throw new Error("Failed to generate AI response");
+        // Log more details if available
+        if (error.response?.data) {
+            console.error("Error details:", JSON.stringify(error.response.data, null, 2));
+        }
+        throw new Error(`Failed to generate AI response: ${error.message}`);
     }
 }
 
