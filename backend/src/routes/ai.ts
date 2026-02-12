@@ -1,7 +1,7 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { requireAuth } from "../middleware/auth";
-import { askQuestion } from "../controllers/ai";
+import { askQuestion, getChatHistory, clearChatHistory } from "../controllers/ai";
 
 const router = Router();
 
@@ -17,8 +17,9 @@ const aiRateLimiter = rateLimit({
 });
 
 router.use(requireAuth as any);
-router.use(aiRateLimiter);
 
-router.post("/ask", askQuestion as any);
+router.get("/history", getChatHistory as any);
+router.delete("/history", clearChatHistory as any);
+router.post("/ask", aiRateLimiter as any, askQuestion as any);
 
 export default router;

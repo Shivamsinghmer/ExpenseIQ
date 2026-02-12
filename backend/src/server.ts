@@ -5,6 +5,12 @@ import transactionRoutes from "./routes/transactions";
 import tagRoutes from "./routes/tags";
 import aiRoutes from "./routes/ai";
 
+console.log("--- Environment Verification ---");
+console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`PORT: ${process.env.PORT}`);
+console.log(`GROQ_API_KEY: ${process.env.GROQ_API_KEY ? "LOADED (Starts with " + process.env.GROQ_API_KEY.substring(0, 4) + ")" : "MISSING"}`);
+console.log(`CLERK_SECRET_KEY: ${process.env.CLERK_SECRET_KEY ? "LOADED" : "MISSING"}`);
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -18,7 +24,10 @@ app.use(express.json({ limit: "10mb" }));
 
 // Request logging
 app.use((req, _res, next) => {
-    console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    if (req.method === "POST") {
+        console.log("Body keys:", Object.keys(req.body));
+    }
     next();
 });
 
@@ -43,8 +52,27 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
     res.status(500).json({ error: "Internal server error" });
 });
 
+import os from "os";
+
+// ... existing code ...
+
+const getLocalIP = () => {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]!) {
+            if (iface.family === "IPv4" && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return "127.0.0.1";
+};
+
 app.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(`🚀 ExpenseIQ API server running on port ${PORT} (accessible at http://10.118.246.39:${PORT})`);
+    const localIP = getLocalIP();
+    console.log(`🚀 ExpenseIQ API server running on port ${PORT}`);
+    console.log(`🔗 Local access: http://localhost:${PORT}`);
+    console.log(`📱 Physical device access: http://${localIP}:${PORT}`);
 });
 
 // Keep the process alive
