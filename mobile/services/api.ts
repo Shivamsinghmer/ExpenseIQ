@@ -19,12 +19,19 @@ export function setAuthToken(token: string | null) {
 // Request interceptor to attach auth token
 api.interceptors.request.use(
     (config) => {
+        const fullUrl = `${config.baseURL}${config.url}`;
+        console.log(`[API Request] ${config.method?.toUpperCase()} ${fullUrl}`);
         if (authToken) {
             config.headers.Authorization = `Bearer ${authToken}`;
+        } else {
+            console.warn(`[API Request] No auth token available for ${fullUrl}`);
         }
         return config;
     },
-    (error) => Promise.reject(error)
+    (error) => {
+        console.error("[API Request] Setup Error:", error);
+        return Promise.reject(error);
+    }
 );
 
 // Response interceptor for error handling
@@ -142,6 +149,8 @@ export interface AIResponse {
 export const aiAPI = {
     ask: (question: string) =>
         api.post<AIResponse>("/ai/ask", { question }),
+    getHistory: () => api.get<any[]>("/ai/history"),
+    clearHistory: () => api.delete("/ai/history"),
 };
 
 export default api;

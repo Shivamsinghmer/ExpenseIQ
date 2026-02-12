@@ -34,7 +34,8 @@ export default function SignIn() {
 
             const { createdSessionId, setActive: setOAuthActive } = await startOAuthFlow({ redirectUrl });
             if (createdSessionId && setOAuthActive) {
-                setOAuthActive({ session: createdSessionId });
+                await setOAuthActive({ session: createdSessionId });
+                router.replace("/(tabs)/dashboard");
             } else {
                 // Use generic error if session creation fails without specific error
                 Alert.alert("Error", "Google Sign-In failed or was cancelled.");
@@ -66,7 +67,7 @@ export default function SignIn() {
 
                 if (result.status === "complete") {
                     if (setActive) await setActive({ session: result.createdSessionId });
-                    router.replace("/(tabs)");
+                    router.replace("/(tabs)/index");
                 } else {
                     console.log("2FA Incomplete:", result);
                     setError("Verification failed. Please check the code.");
@@ -110,7 +111,7 @@ export default function SignIn() {
     };
 
     return (
-        <View className="flex-1 bg-slate-50">
+        <View className="flex-1 bg-white">
             <KeyboardAwareScrollView
                 contentContainerStyle={{ flexGrow: 1 }}
                 keyboardShouldPersistTaps="handled"
@@ -120,34 +121,28 @@ export default function SignIn() {
                 <View className="flex-1 justify-center px-6 py-12">
                     {/* Header */}
                     <View className="items-center mb-10">
-                        <View className="mb-6 shadow-xl shadow-indigo-500/20 bg-white p-4 rounded-3xl">
-                            <Image
-                                source={require("../../assets/logo.png")}
-                                style={{ width: 80, height: 80 }}
-                                resizeMode="contain"
-                            />
-                        </View>
-                        <Text className="text-4xl font-black text-slate-800 tracking-tight">ExpenseIQ</Text>
-                        <Text className="text-slate-500 text-base font-medium mt-2">Smart financial tracking</Text>
+
+                        <Text className="text-4xl font-black text-gray-900 tracking-tight">ExpenseIQ</Text>
+                        <Text className="text-gray-500 text-base font-medium mt-2">Smart financial tracking</Text>
                     </View>
 
                     {/* Card Container */}
-                    <View className="bg-white border border-slate-200 p-8 rounded-[32px] shadow-xl shadow-indigo-100">
-                        <Text className="text-2xl font-bold text-slate-800 mb-2">
+                    <View className="bg-white border border-gray-200 p-8 rounded-[32px] shadow-sm">
+                        <Text className="text-2xl font-bold text-gray-900 mb-2">
                             Welcome Back
                         </Text>
-                        <Text className="text-slate-500 text-sm mb-8 leading-5">
+                        <Text className="text-gray-500 text-sm mb-8 leading-5">
                             Please sign in to continue to your dashboard.
                         </Text>
 
                         <View className="space-y-5">
                             {show2FA ? (
                                 <View>
-                                    <Text className="text-slate-700 font-bold text-sm mb-2 ml-1">Verification Code</Text>
+                                    <Text className="text-gray-700 font-bold text-sm mb-2 ml-1">Verification Code</Text>
                                     <TextInput
-                                        className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 text-slate-800 text-center text-2xl font-bold tracking-[8px] focus:border-primary focus:bg-white"
+                                        className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 text-gray-900 text-center text-2xl font-bold tracking-[8px] focus:border-black focus:bg-white"
                                         placeholder="000000"
-                                        placeholderTextColor="#94a3b8"
+                                        placeholderTextColor="#9ca3af"
                                         value={code}
                                         onChangeText={setCode}
                                         keyboardType="number-pad"
@@ -157,11 +152,11 @@ export default function SignIn() {
                             ) : (
                                 <>
                                     <View>
-                                        <Text className="text-slate-700 font-bold text-sm mb-2 ml-1">Email Address</Text>
+                                        <Text className="text-gray-700 font-bold text-sm mb-2 ml-1">Email Address</Text>
                                         <TextInput
-                                            className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 text-slate-800 text-base font-medium focus:border-primary focus:bg-white"
+                                            className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 text-gray-900 text-base font-medium focus:border-black focus:bg-white"
                                             placeholder="name@example.com"
-                                            placeholderTextColor="#94a3b8"
+                                            placeholderTextColor="#9ca3af"
                                             value={email}
                                             onChangeText={setEmail}
                                             keyboardType="email-address"
@@ -170,11 +165,11 @@ export default function SignIn() {
                                         />
                                     </View>
                                     <View>
-                                        <Text className="text-slate-700 font-bold text-sm mb-2 ml-1">Password</Text>
+                                        <Text className="text-gray-700 font-bold text-sm mb-2 ml-1">Password</Text>
                                         <TextInput
-                                            className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 text-slate-800 text-base font-medium focus:border-primary focus:bg-white"
+                                            className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 text-gray-900 text-base font-medium focus:border-black focus:bg-white"
                                             placeholder="Enter your password"
-                                            placeholderTextColor="#94a3b8"
+                                            placeholderTextColor="#9ca3af"
                                             value={password}
                                             onChangeText={setPassword}
                                             secureTextEntry
@@ -192,13 +187,13 @@ export default function SignIn() {
                             <TouchableOpacity
                                 onPress={handleSignIn}
                                 disabled={loading || (show2FA ? code.length !== 6 : (!email || !password))}
-                                className={`mt-2 py-4 items-center rounded-2xl shadow-lg shadow-indigo-500/30 ${(show2FA ? code.length !== 6 : (!email || !password)) ? "bg-slate-200 shadow-none" : "bg-indigo-600"}`}
+                                className={`mt-2 py-4 items-center rounded-2xl shadow-sm ${(show2FA ? code.length !== 6 : (!email || !password)) ? "bg-gray-200 shadow-none" : "bg-gray-900"}`}
                                 activeOpacity={0.9}
                             >
                                 {loading ? (
                                     <ActivityIndicator color="#fff" />
                                 ) : (
-                                    <Text className={`${(show2FA ? code.length !== 6 : (!email || !password)) ? "text-slate-400" : "text-white"} font-bold text-lg`}>
+                                    <Text className={`${(show2FA ? code.length !== 6 : (!email || !password)) ? "text-gray-400" : "text-white"} font-bold text-lg`}>
                                         {show2FA ? "Verify Code" : "Sign In"}
                                     </Text>
                                 )}
@@ -206,28 +201,33 @@ export default function SignIn() {
 
                             {/* Divider & Google Sign In */}
                             <View className="flex-row items-center mt-4 mb-4">
-                                <View className="flex-1 h-[1px] bg-slate-200" />
-                                <Text className="mx-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Or</Text>
-                                <View className="flex-1 h-[1px] bg-slate-200" />
+                                <View className="flex-1 h-[1px] bg-gray-200" />
+                                <Text className="mx-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Or</Text>
+                                <View className="flex-1 h-[1px] bg-gray-200" />
                             </View>
 
                             <TouchableOpacity
                                 onPress={handleGoogleSignIn}
-                                className="py-4 items-center bg-white border border-slate-200 rounded-2xl"
+                                className="py-4 items-center bg-white border border-gray-200 rounded-2xl"
                                 activeOpacity={0.8}
                             >
-                                <View className="flex-row items-center">
-                                    <Text className="text-slate-700 font-bold text-base">Continue with Google</Text>
+                                <View className="flex-row items-center gap-3">
+                                    <Image
+                                        source={require("../../assets/google-icon.png")}
+                                        style={{ width: 24, height: 24 }}
+                                        resizeMode="contain"
+                                    />
+                                    <Text className="text-gray-700 font-bold text-base">Continue with Google</Text>
                                 </View>
                             </TouchableOpacity>
                         </View>
                     </View>
 
                     <View className="flex-row justify-center mt-10">
-                        <Text className="text-slate-500 text-sm font-medium">New to ExpenseIQ? </Text>
+                        <Text className="text-gray-500 text-sm font-medium">New to ExpenseIQ? </Text>
                         <Link href="/(auth)/sign-up" asChild>
                             <TouchableOpacity>
-                                <Text className="text-primary text-sm font-black underline decoration-2 underline-offset-4">Create Account</Text>
+                                <Text className="text-gray-900 text-sm font-black underline decoration-2 underline-offset-4">Create Account</Text>
                             </TouchableOpacity>
                         </Link>
                     </View>

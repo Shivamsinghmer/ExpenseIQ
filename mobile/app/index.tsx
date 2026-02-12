@@ -11,9 +11,9 @@ export default function Index() {
         if (!isLoaded) return;
 
         if (isSignedIn) {
-            router.replace("/(tabs)");
+            router.replace("/(tabs)/dashboard");
         } else {
-            router.replace("/(auth)/sign-in");
+            router.replace("/(auth)/welcome");
         }
     }, [isSignedIn, isLoaded]);
 
