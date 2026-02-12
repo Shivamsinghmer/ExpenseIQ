@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
     View, Text, TextInput, TouchableOpacity, ActivityIndicator,
     Platform, Image, Alert
@@ -8,6 +8,7 @@ import { useRouter, Link } from "expo-router";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useWarmUpBrowser } from "../../hooks/useWarmUpBrowser";
 import { API_BASE_URL } from "../../lib/config";
+import * as AuthSession from "expo-auth-session";
 
 export default function SignIn() {
     useWarmUpBrowser();
@@ -24,9 +25,14 @@ export default function SignIn() {
 
     const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
-    const handleGoogleSignIn = React.useCallback(async () => {
+    const handleGoogleSignIn = useCallback(async () => {
         try {
-            const { createdSessionId, setActive: setOAuthActive } = await startOAuthFlow();
+            const redirectUrl = AuthSession.makeRedirectUri({
+                path: "oauth-native-callback",
+            });
+            console.log("OAuth redirectUrl:", redirectUrl);
+
+            const { createdSessionId, setActive: setOAuthActive } = await startOAuthFlow({ redirectUrl });
             if (createdSessionId && setOAuthActive) {
                 setOAuthActive({ session: createdSessionId });
             } else {
