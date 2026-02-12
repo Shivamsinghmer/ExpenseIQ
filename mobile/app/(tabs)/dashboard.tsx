@@ -19,6 +19,8 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, type SummaryResponse, type Transaction } from "../../services/api";
+import { ArrowDown, ArrowUp, File, TrendingUp, TrendingDown } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 
 
@@ -29,7 +31,11 @@ function TransactionItem({ item }: { item: Transaction }) {
             <View
                 className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-red-50 dark:bg-red-500/10"}`}
             >
-                <Text className="text-xl">{isIncome ? "💰" : "💳"}</Text>
+                {isIncome ? (
+                    <TrendingUp size={20} color="#10b981" />
+                ) : (
+                    <TrendingDown size={20} color="#ef4444" />
+                )}
             </View>
             <View className="flex-1">
                 <Text className="text-slate-900 dark:text-white font-bold text-base">{item.title}</Text>
@@ -135,6 +141,7 @@ export default function Dashboard() {
     const { user } = useUser();
     const router = useRouter();
     const { isDark } = useTheme();
+    const insets = useSafeAreaInsets();
     const [pdfLoading, setPdfLoading] = useState(false);
 
     const [range, setRange] = useState<"1W" | "1M" | "3M" | "1Y" | "All">("1M");
@@ -211,20 +218,24 @@ export default function Dashboard() {
         );
     }
 
+
     return (
         <ScrollView
             className="flex-1 bg-background dark:bg-background-dark"
-            contentContainerStyle={{ paddingBottom: 100 }}
+            contentContainerStyle={{ paddingBottom: 120 }}
             refreshControl={
                 <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={isDark ? "#818cf8" : "#6366f1"} />
             }
         >
             {/* Header Section */}
-            <View className="bg-indigo-600 pt-16 pb-8 px-6 rounded-b-[40px] shadow-2xl shadow-indigo-500/30 mb-6">
+            <View
+                className="bg-transparent pb-6 px-6 rounded-b-[20px] mb-6"
+                style={{ paddingTop: insets.top + 20 }}
+            >
                 <View className="flex-row items-center justify-between mb-8">
                     <View>
-                        <Text className="text-indigo-100 text-sm font-semibold uppercase tracking-wider">Total Balance</Text>
-                        <Text className="text-white text-5xl font-black mt-1">₹{summary?.balance.toFixed(2) || "0.00"}</Text>
+                        <Text className="text-black/60 dark:text-white/60 text-sm font-bold uppercase tracking-widest mb-1">Total Balance</Text>
+                        <Text className="text-black dark:text-white text-5xl font-black">₹{summary?.balance.toFixed(2) || "0.00"}</Text>
                     </View>
                     <TouchableOpacity
                         onPress={() => {
@@ -233,10 +244,10 @@ export default function Dashboard() {
                                 { text: "Sign Out", style: "destructive", onPress: () => signOut() },
                             ]);
                         }}
-                        className="bg-white/20 p-3 rounded-full backdrop-blur-md items-center justify-center"
+                        className="bg-black/10 dark:bg-white/20 p-3 rounded-full items-center justify-center"
                         accessibilityLabel="Sign Out"
                     >
-                        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={isDark ? "white" : "black"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                             <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                             <Path d="M16 17l5-5-5-5" />
                             <Path d="M21 12H9" />
@@ -244,24 +255,24 @@ export default function Dashboard() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Quick Stats Overlay (Income/Expense) */}
-                <View className="flex-row space-x-4">
-                    <View className="flex-1 bg-white/10 p-4 rounded-3xl flex-row items-center border border-white/5 backdrop-blur-lg">
-                        <View className="w-10 h-10 rounded-full bg-emerald-400/20 items-center justify-center mr-3">
-                            <Text className="text-emerald-300 text-sm">▼</Text>
+                {/* Quick Stats (Income/Expense) */}
+                <View className="flex-row gap-4">
+                    <View className="flex-1 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <View className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 items-center justify-center">
+                            <ArrowUp size={16} color="#10b981" />
                         </View>
                         <View>
-                            <Text className="text-indigo-100 text-xs font-semibold">Income</Text>
-                            <Text className="text-white text-xl font-bold">₹{summary?.totalIncome.toFixed(0)}</Text>
+                            <Text className="text-black/60 dark:text-white/80 text-lg font-medium">Income</Text>
+                            <Text className="text-black dark:text-white text-xl font-bold">₹{summary?.totalIncome.toFixed(0)}</Text>
                         </View>
                     </View>
-                    <View className="flex-1 bg-white/10 p-4 rounded-3xl flex-row items-center border border-white/5 backdrop-blur-lg">
-                        <View className="w-10 h-10 rounded-full bg-red-400/20 items-center justify-center mr-3">
-                            <Text className="text-red-300 text-sm">▲</Text>
+                    <View className="flex-1 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <View className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-500/20 items-center justify-center">
+                            <ArrowDown size={16} color="#ef4444" />
                         </View>
                         <View>
-                            <Text className="text-indigo-100 text-xs font-semibold">Expense</Text>
-                            <Text className="text-white text-xl font-bold">₹{summary?.totalExpense.toFixed(0)}</Text>
+                            <Text className="text-black/60 dark:text-white/80 text-lg font-medium">Expense</Text>
+                            <Text className="text-black dark:text-white text-xl font-bold">₹{summary?.totalExpense.toFixed(0)}</Text>
                         </View>
                     </View>
                 </View>
@@ -274,15 +285,15 @@ export default function Dashboard() {
                 <TouchableOpacity
                     onPress={handleDownloadPdf}
                     disabled={pdfLoading}
-                    className="bg-white dark:bg-surface-dark shadow-sm border border-border dark:border-border-dark rounded-2xl py-4 flex-row items-center justify-center mb-6"
+                    className="bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 rounded-2xl py-4 flex-row items-center justify-center mb-6 gap-3"
                     activeOpacity={0.7}
                 >
                     {pdfLoading ? (
-                        <ActivityIndicator size="small" color={isDark ? "#818cf8" : "#6366f1"} />
+                        <ActivityIndicator size="small" color={isDark ? "white" : "black"} />
                     ) : (
                         <>
-                            <Text className="text-xl mr-2">📄</Text>
-                            <Text className="text-slate-700 dark:text-slate-200 font-bold text-sm">
+                            <File size={18} color={isDark ? "white" : "black"} />
+                            <Text className={isDark ? "text-white font-semibold text-md" : "text-black font-semibold text-md"}>
                                 Download Report
                             </Text>
                         </>
@@ -290,7 +301,7 @@ export default function Dashboard() {
                 </TouchableOpacity>
 
                 {/* Financial Trend Chart */}
-                <View className="bg-white dark:bg-surface-dark rounded-3xl p-5 shadow-sm border border-border dark:border-border-dark mb-6">
+                <View className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
                     <View className="flex-row items-center justify-between mb-4">
                         <Text className="text-slate-800 dark:text-white text-lg font-bold">Analysis</Text>
                         {/* Simple Time Range */}
@@ -362,8 +373,8 @@ export default function Dashboard() {
                             <TransactionItem key={transaction.id} item={transaction} />
                         ))
                     ) : (
-                        <View className="bg-white dark:bg-surface-dark border border-border border-dashed dark:border-border-dark rounded-2xl p-8 items-center justify-center">
-                            <Text className="text-4xl mb-3 opacity-50">📝</Text>
+                        <View className="bg-white border border-gray-400 border-dashed rounded-2xl p-6 items-center justify-center">
+                            <File size={20} color="gray" style={{ marginBottom: 6 }} />
                             <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium text-center">
                                 No transactions yet.{"\n"}Start tracking your expenses!
                             </Text>

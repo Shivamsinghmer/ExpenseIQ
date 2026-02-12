@@ -6,8 +6,10 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, type Transaction, type TransactionListResponse } from "../../services/api";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CreditCard, Search, TrendingUp, TrendingDown, X } from "lucide-react-native";
 
-function TransactionCard({ item, onDelete }: { item: Transaction; onDelete: (id: string) => void }) {
+function TransactionCard({ item, onDelete, isDark }: { item: Transaction; onDelete: (id: string) => void; isDark: boolean }) {
     const isIncome = item.type === "INCOME";
     return (
         <TouchableOpacity
@@ -22,7 +24,11 @@ function TransactionCard({ item, onDelete }: { item: Transaction; onDelete: (id:
         >
             <View className="flex-row items-center">
                 <View className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-red-50 dark:bg-red-500/10"}`}>
-                    <Text className="text-xl">{isIncome ? "💰" : "💳"}</Text>
+                    {isIncome ? (
+                        <TrendingUp size={20} color="#10b981" />
+                    ) : (
+                        <TrendingDown size={20} color="#ef4444" />
+                    )}
                 </View>
                 <View className="flex-1">
                     <Text className="text-slate-900 dark:text-white font-bold text-base">{item.title}</Text>
@@ -62,6 +68,7 @@ function TransactionCard({ item, onDelete }: { item: Transaction; onDelete: (id:
 export default function Transactions() {
     const queryClient = useQueryClient();
     const { isDark } = useTheme();
+    const insets = useSafeAreaInsets();
     const [filter, setFilter] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
@@ -86,37 +93,45 @@ export default function Transactions() {
 
     return (
         <View className="flex-1 bg-background dark:bg-background-dark">
-            {/* Search & Filter Container */}
-            <View className="px-5 pt-4 pb-4 bg-background dark:bg-background-dark z-10">
-                <View className="flex-row items-center bg-white dark:bg-surface-dark border border-border dark:border-border-dark rounded-2xl px-4 py-3 mb-4 shadow-sm">
-                    <Text className="text-lg mr-2">🔍</Text>
+            {/* Header Section */}
+            <View
+                className="bg-transparent pb-6 px-6 rounded-b-[20px] mb-6"
+                style={{ paddingTop: insets.top + 20 }}
+            >
+                <View className="flex-row items-center justify-between mb-3">
+                    <Text className="text-black dark:text-white text-3xl font-bold tracking-tight">Transactions</Text>
+                </View>
+
+                {/* Search Bar */}
+                <View className="flex-row items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-1 mb-4 shadow-sm">
+                    <Search size={18} color={isDark ? "#94a3b8" : "#64748b"} style={{ marginRight: 8 }} />
                     <TextInput
-                        className="flex-1 text-base text-slate-900 dark:text-white font-medium"
+                        className="flex-1 text-base font-medium text-slate-800 dark:text-white"
                         placeholder="Search transactions..."
-                        placeholderTextColor={isDark ? "#94a3b8" : "#cbd5e1"}
+                        placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
                         value={search}
                         onChangeText={(val) => { setSearch(val); setPage(1); }}
-                        selectionColor="#6366f1"
+                        selectionColor="black"
                     />
                     {search.length > 0 && (
                         <TouchableOpacity onPress={() => setSearch("")}>
-                            <Text className="text-slate-400">✕</Text>
+                            <X size={16} color={isDark ? "#94a3b8" : "#64748b"} />
                         </TouchableOpacity>
                     )}
                 </View>
 
                 {/* Filter Tabs */}
-                <View className="flex-row bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                <View className="flex-row bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                     {(["ALL", "INCOME", "EXPENSE"] as const).map((f) => {
                         const isActive = filter === f;
                         return (
                             <TouchableOpacity
                                 key={f}
                                 onPress={() => { setFilter(f); setPage(1); }}
-                                className={`flex-1 py-2.5 rounded-lg items-center justify-center ${isActive ? "bg-white dark:bg-surface-dark shadow-sm" : ""}`}
+                                className={`flex-1 py-2.5 rounded-lg items-center justify-center ${isActive ? "bg-black dark:bg-slate-600" : ""}`}
                                 activeOpacity={0.7}
                             >
-                                <Text className={`text-xs font-bold ${isActive ? "text-primary dark:text-primary-dark" : "text-slate-500 dark:text-slate-400"}`}>
+                                <Text className={`text-xs font-bold ${isActive ? "text-white" : "text-slate-400 dark:text-slate-500"}`}>
                                     {f === "ALL" ? "All" : f === "INCOME" ? "Income" : "Expense"}
                                 </Text>
                             </TouchableOpacity>
@@ -128,20 +143,20 @@ export default function Transactions() {
             {/* List */}
             {isLoading ? (
                 <View className="flex-1 items-center justify-center">
-                    <ActivityIndicator size="large" color="#6366f1" />
+                    <ActivityIndicator size="large" color="#000000" />
                 </View>
             ) : (
                 <FlatList
                     data={data?.transactions || []}
-                    renderItem={({ item }) => <TransactionCard item={item} onDelete={(id) => deleteMutation.mutate(id)} />}
+                    renderItem={({ item }) => <TransactionCard item={item} onDelete={(id) => deleteMutation.mutate(id)} isDark={isDark} />}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }}
                     showsVerticalScrollIndicator={false}
-                    refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#6366f1" />}
+                    refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#000000" />}
                     ListEmptyComponent={
                         <View className="items-center justify-center py-20 opacity-50">
-                            <Text className="text-6xl mb-4">📭</Text>
-                            <Text className="text-slate-500 dark:text-slate-400 text-base font-medium">No transactions found</Text>
+                            <CreditCard size={30} color="gray" />
+                            <Text className="text-slate-500 dark:text-slate-400 text-lg font-medium mt-2">No transactions found</Text>
                         </View>
                     }
                 />

@@ -17,10 +17,13 @@ import {
     type Tag,
     type CreateTransactionData,
 } from "../../services/api";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { TrendingDown, TrendingUp, CalendarDays, FileText, StickyNote, Check, ChevronRight } from "lucide-react-native";
 
 export default function AddTransaction() {
     const queryClient = useQueryClient();
     const { isDark } = useTheme();
+    const insets = useSafeAreaInsets();
     const [title, setTitle] = useState("");
     const [amount, setAmount] = useState("");
     const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
@@ -76,41 +79,67 @@ export default function AddTransaction() {
         );
     };
 
-    const placeholderColor = isDark ? "#666666" : "#999999";
+    const placeholderColor = isDark ? "#64748b" : "#94a3b8";
 
     return (
-        <View className="flex-1 bg-slate-50 dark:bg-slate-900">
+        <View className="flex-1 bg-background dark:bg-background-dark">
             <KeyboardAwareScrollView
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: 150 }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
                 enableOnAndroid={true}
-                extraScrollHeight={Platform.OS === "ios" ? 20 : 100}
+                extraScrollHeight={Platform.OS === "ios" ? 40 : 120}
                 style={{ flex: 1 }}
             >
-                <View className="px-6 pt-6">
-                    {/* Header Card */}
-                    <View className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-xl shadow-indigo-100 dark:shadow-none border border-slate-100 dark:border-slate-700 mb-6">
-                        <Text className="text-center text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest text-xs mb-4">
-                            Transaction Type
-                        </Text>
+                {/* Header Section */}
+                <View
+                    className="bg-transparent pb-4 px-6 rounded-b-[20px]"
+                    style={{ paddingTop: insets.top + 20 }}
+                >
+                    <Text className="text-black dark:text-white text-3xl font-black tracking-tight mb-1">New Transaction</Text>
+                    <Text className="text-black/50 dark:text-white/50 text-base font-semibold">Track your spending effortlessly</Text>
+                </View>
+
+                <View className="px-6 mt-4">
+                    {/* Amount & Type Card */}
+                    <View className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-slate-100 dark:border-slate-700 mb-6">
+                        <View className="items-center mb-8">
+                            <Text className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-[2px] text-[10px] mb-4">Enter Amount</Text>
+                            <View className="flex-row items-center justify-center">
+                                <Text
+                                    className="text-4xl font-black mr-2"
+                                    style={{ color: type === "EXPENSE" ? (isDark ? "#fca5a5" : "#1e293b") : "#10b981" }}
+                                >₹</Text>
+                                <TextInput
+                                    className="text-6xl font-black text-center min-w-[120px]"
+                                    style={{ color: type === "EXPENSE" ? (isDark ? "#ffffff" : "#1e293b") : "#10b981" }}
+                                    placeholder="0"
+                                    placeholderTextColor={isDark ? "#334155" : "#cbd5e1"}
+                                    value={amount}
+                                    onChangeText={(val) => setAmount(val.replace(/[^0-9.]/g, ""))}
+                                    keyboardType="decimal-pad"
+                                    autoFocus
+                                />
+                            </View>
+                        </View>
+
                         <View className="flex-row bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl">
                             <TouchableOpacity
                                 onPress={() => setType("EXPENSE")}
-                                className="flex-1 py-3.5 rounded-xl items-center flex-row justify-center"
+                                className="flex-1 py-4 rounded-xl items-center flex-row justify-center"
                                 style={type === "EXPENSE" ? {
                                     backgroundColor: isDark ? "#334155" : "#ffffff",
                                     shadowColor: "#000",
-                                    shadowOffset: { width: 0, height: 1 },
+                                    shadowOffset: { width: 0, height: 2 },
                                     shadowOpacity: 0.1,
-                                    shadowRadius: 2,
-                                    elevation: 1,
+                                    shadowRadius: 4,
+                                    elevation: 2,
                                 } : {}}
                                 activeOpacity={0.7}
                             >
-                                <Text className="mr-2 text-lg">💸</Text>
+                                <TrendingDown size={18} color={type === "EXPENSE" ? "#ef4444" : (isDark ? "#475569" : "#94a3b8")} />
                                 <Text
-                                    className="font-bold text-sm"
+                                    className="font-bold text-sm ml-2"
                                     style={{ color: type === "EXPENSE" ? (isDark ? "#ffffff" : "#1e293b") : (isDark ? "#64748b" : "#94a3b8") }}
                                 >
                                     Expense
@@ -118,55 +147,43 @@ export default function AddTransaction() {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => setType("INCOME")}
-                                className="flex-1 py-3.5 rounded-xl items-center flex-row justify-center"
+                                className="flex-1 py-4 rounded-xl items-center flex-row justify-center"
                                 style={type === "INCOME" ? {
                                     backgroundColor: isDark ? "#334155" : "#ffffff",
                                     shadowColor: "#000",
-                                    shadowOffset: { width: 0, height: 1 },
+                                    shadowOffset: { width: 0, height: 2 },
                                     shadowOpacity: 0.1,
-                                    shadowRadius: 2,
-                                    elevation: 1,
+                                    shadowRadius: 4,
+                                    elevation: 2,
                                 } : {}}
                                 activeOpacity={0.7}
                             >
-                                <Text className="mr-2 text-lg">💰</Text>
+                                <TrendingUp size={18} color={type === "INCOME" ? "#10b981" : (isDark ? "#475569" : "#94a3b8")} />
                                 <Text
-                                    className="font-bold text-sm"
+                                    className="font-bold text-sm ml-2"
                                     style={{ color: type === "INCOME" ? (isDark ? "#ffffff" : "#1e293b") : (isDark ? "#64748b" : "#94a3b8") }}
                                 >
                                     Income
                                 </Text>
                             </TouchableOpacity>
                         </View>
-
-                        <View className="items-center mt-8 mb-4">
-                            <Text className="text-slate-400 dark:text-slate-500 font-medium text-sm mb-2">Amount</Text>
-                            <View className="flex-row items-center justify-center">
-                                <Text
-                                    className="text-4xl font-black mr-1"
-                                    style={{ color: type === "EXPENSE" ? (isDark ? "#ffffff" : "#1e293b") : "#10b981" }}
-                                >₹</Text>
-                                <TextInput
-                                    className="text-5xl font-black text-center min-w-[100px]"
-                                    style={{ color: type === "EXPENSE" ? (isDark ? "#ffffff" : "#1e293b") : "#10b981" }}
-                                    placeholder="0"
-                                    placeholderTextColor={isDark ? "#475569" : "#cbd5e1"}
-                                    value={amount}
-                                    onChangeText={(val) => setAmount(val.replace(/[^0-9.]/g, ""))}
-                                    keyboardType="decimal-pad"
-                                />
-                            </View>
-                        </View>
                     </View>
 
-                    {/* Details Form */}
-                    <View className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-xl shadow-indigo-100 dark:shadow-none border border-slate-100 dark:border-slate-700">
+                    {/* Details Card */}
+                    <View className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-sm border border-slate-100 dark:border-slate-700">
+                        <Text className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-[2px] text-[10px] mb-6">Transaction Details</Text>
+
                         {/* Title */}
                         <View className="mb-6">
-                            <Text className="text-slate-700 dark:text-slate-300 font-bold text-sm mb-2 ml-1">Title</Text>
+                            <View className="flex-row items-center mb-2.5">
+                                <View className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-900 items-center justify-center mr-3">
+                                    <FileText size={16} color={isDark ? "#94a3b8" : "#64748b"} />
+                                </View>
+                                <Text className="text-slate-700 dark:text-slate-300 font-bold text-base">What's it for?</Text>
+                            </View>
                             <TextInput
-                                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-slate-800 dark:text-white text-base font-medium focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition-all"
-                                placeholder="What is this for?"
+                                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-slate-800 dark:text-white text-base font-semibold"
+                                placeholder="Coffee, Rent, Salary..."
                                 placeholderTextColor={placeholderColor}
                                 value={title}
                                 onChangeText={setTitle}
@@ -175,9 +192,14 @@ export default function AddTransaction() {
 
                         {/* Date */}
                         <View className="mb-6">
-                            <Text className="text-slate-700 dark:text-slate-300 font-bold text-sm mb-2 ml-1">Date</Text>
+                            <View className="flex-row items-center mb-2.5">
+                                <View className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-900 items-center justify-center mr-3">
+                                    <CalendarDays size={16} color={isDark ? "#94a3b8" : "#64748b"} />
+                                </View>
+                                <Text className="text-slate-700 dark:text-slate-300 font-bold text-base">Transaction Date</Text>
+                            </View>
                             <TextInput
-                                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-slate-800 dark:text-white text-base font-medium"
+                                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-slate-800 dark:text-white text-base font-semibold"
                                 placeholder="YYYY-MM-DD"
                                 placeholderTextColor={placeholderColor}
                                 value={date}
@@ -188,7 +210,12 @@ export default function AddTransaction() {
                         {/* Tags */}
                         {tags && tags.length > 0 && (
                             <View className="mb-6">
-                                <Text className="text-slate-700 dark:text-slate-300 font-bold text-sm mb-3 ml-1">Tags</Text>
+                                <View className="flex-row items-center mb-4">
+                                    <View className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-900 items-center justify-center mr-3">
+                                        <StickyNote size={16} color={isDark ? "#94a3b8" : "#64748b"} />
+                                    </View>
+                                    <Text className="text-slate-700 dark:text-slate-300 font-bold text-base">Select Tags</Text>
+                                </View>
                                 <View className="flex-row flex-wrap">
                                     {tags.map((tag) => {
                                         const isSelected = selectedTags.includes(tag.id);
@@ -198,19 +225,23 @@ export default function AddTransaction() {
                                                 onPress={() => toggleTag(tag.id)}
                                                 className="mr-2 mb-2 px-4 py-2.5 rounded-xl border-2"
                                                 style={{
-                                                    borderColor: isSelected ? "#6366f1" : (isDark ? "#334155" : "#e2e8f0"),
-                                                    backgroundColor: isSelected ? (isDark ? "rgba(99,102,241,0.2)" : "#eef2ff") : "transparent",
+                                                    borderColor: isSelected ? (isDark ? "#ffffff" : "#000000") : (isDark ? "#334155" : "#f1f5f9"),
+                                                    backgroundColor: isSelected ? (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)") : "transparent",
                                                 }}
                                                 activeOpacity={0.7}
                                             >
                                                 <View className="flex-row items-center">
-                                                    <View
-                                                        className="w-2 h-2 rounded-full mr-2"
-                                                        style={{ backgroundColor: isSelected ? "#6366f1" : tag.color }}
-                                                    />
+                                                    {isSelected ? (
+                                                        <Check size={14} color={isDark ? "#fff" : "#000"} className="mr-2" />
+                                                    ) : (
+                                                        <View
+                                                            className="w-3 h-3 rounded-full mr-2 shadow-sm"
+                                                            style={{ backgroundColor: tag.color }}
+                                                        />
+                                                    )}
                                                     <Text
                                                         className="text-xs font-bold"
-                                                        style={{ color: isSelected ? (isDark ? "#a5b4fc" : "#4338ca") : (isDark ? "#94a3b8" : "#475569") }}
+                                                        style={{ color: isSelected ? (isDark ? "#ffffff" : "#000000") : (isDark ? "#64748b" : "#94a3b8") }}
                                                     >
                                                         {tag.name}
                                                     </Text>
@@ -222,36 +253,23 @@ export default function AddTransaction() {
                             </View>
                         )}
 
-                        {/* Notes */}
-                        <View className="mb-6">
-                            <Text className="text-slate-700 dark:text-slate-300 font-bold text-sm mb-2 ml-1">Notes</Text>
-                            <TextInput
-                                className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-slate-800 dark:text-white text-base font-medium h-32"
-                                placeholder="Add any additional details..."
-                                placeholderTextColor={placeholderColor}
-                                value={notes}
-                                onChangeText={setNotes}
-                                multiline
-                                textAlignVertical="top"
-                            />
+                        {/* Summary View (Pre-Submit) */}
+                        <View className="mt-0 pt-6 border-t border-slate-100 dark:border-slate-700">
+                            <TouchableOpacity
+                                onPress={handleSubmit}
+                                disabled={createMutation.isPending}
+                                className={`w-full py-4 rounded-2xl flex-row items-center justify-center shadow-lg ${createMutation.isPending ? "bg-slate-200" : "bg-black shadow-black/20"}`}
+                                activeOpacity={0.9}
+                            >
+                                {createMutation.isPending ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <>
+                                        <Text className="text-white font-semibold text-md tracking-widest">Save Transaction</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
                         </View>
-
-                        {/* Submit */}
-                        <TouchableOpacity
-                            onPress={handleSubmit}
-                            disabled={createMutation.isPending}
-                            className="rounded-2xl py-5 items-center shadow-lg shadow-indigo-500/30"
-                            style={{ backgroundColor: createMutation.isPending ? "#e2e8f0" : "#6366f1" }}
-                            activeOpacity={0.9}
-                        >
-                            {createMutation.isPending ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <Text className="text-white font-bold text-lg">
-                                    Save Transaction
-                                </Text>
-                            )}
-                        </TouchableOpacity>
                     </View>
                 </View>
             </KeyboardAwareScrollView>
