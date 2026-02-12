@@ -1,4 +1,4 @@
-import React from "react";
+    import React from "react";
 import { View } from "react-native";
 import Svg, { Path, Circle, Line, Text as SvgText, G, LinearGradient, Stop, Defs } from "react-native-svg";
 
@@ -17,7 +17,7 @@ interface LineChartProps {
 }
 
 export function LineChart({ datasets, labels, height = 220, width = 300, isDark, unit = "₹" }: LineChartProps) {
-    const margin = { top: 30, right: 20, bottom: 40, left: 20 };
+    const margin = { top: 30, right: 20, bottom: 40, left: 45 };
     const chartHeight = height - margin.top - margin.bottom;
     const chartWidth = width - margin.left - margin.right;
 

@@ -64,8 +64,11 @@ Provide a helpful, fact-based response using ONLY the data above.`,
 
         const rawContent = completion.choices[0]?.message?.content || "I couldn't generate a response.";
 
-        // Strip <think>...</think> tags and their content
-        const cleanContent = rawContent.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+        // Strip <think>...</think> tags and their content (case-insensitive)
+        const cleanContent = rawContent
+            .replace(/<think>[\s\S]*?<\/think>/gi, "")
+            .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+            .trim();
 
         return cleanContent;
     } catch (error: any) {
