@@ -131,7 +131,7 @@ export default function Transactions() {
                                 className={`flex-1 py-2.5 rounded-lg items-center justify-center ${isActive ? "bg-black dark:bg-slate-600" : ""}`}
                                 activeOpacity={0.7}
                             >
-                                <Text className={`text-xs font-bold ${isActive ? "text-white" : "text-slate-400 dark:text-slate-500"}`}>
+                                <Text className={`text-sm font-bold ${isActive ? "text-white" : "text-slate-400 dark:text-slate-500"}`}>
                                     {f === "ALL" ? "All" : f === "INCOME" ? "Income" : "Expense"}
                                 </Text>
                             </TouchableOpacity>
