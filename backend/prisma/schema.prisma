@@ -14,10 +14,26 @@ enum TransactionType {
 model User {
   id           String        @id @default(cuid())
   clerkUserId  String        @unique
+  isPro        Boolean       @default(false)
   createdAt    DateTime      @default(now())
   transactions Transaction[]
   tags         Tag[]
   chatMessages ChatMessage[]
+  orders       Order[]
+}
+
+model Order {
+  id               String   @id @default(cuid())
+  orderId          String   @unique // Cashfree order id
+  paymentSessionId String?
+  amount           Float
+  status           String   @default("PENDING") // PENDING, PAID, FAILED, CANCELLED
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model ChatMessage {
