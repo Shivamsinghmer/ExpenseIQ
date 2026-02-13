@@ -136,6 +136,13 @@ export const tagsAPI = {
     delete: (id: string) => api.delete(`/tags/${id}`),
 };
 
+// Payments
+export const paymentsAPI = {
+    createOrder: (amount: number) =>
+        api.post<{ order_id: string; payment_session_id: string }>("/payments/create-order", { amount }),
+    checkStatus: () => api.get<{ isPro: boolean }>("/payments/status"),
+};
+
 // AI
 export interface AIResponse {
     question: string;

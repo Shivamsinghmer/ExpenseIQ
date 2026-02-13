@@ -1,125 +1,216 @@
-import React from "react";
-import {
-    View,
-    Text,
-    TouchableOpacity,
-    Image,
-    ScrollView,
-    Dimensions,
-} from "react-native";
-import { useRouter } from "expo-router";
-import { ArrowLeft, CheckCircle2 } from "lucide-react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Text as SvgText, Defs, LinearGradient, Stop } from "react-native-svg";
+import React, { useState, useEffect } from "react";
+import { View, Text, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from "react-native";
 import { useTheme } from "../providers/theme-provider";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Check, Crown, ShieldCheck, Zap, ArrowLeft, CheckCircle2 } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { paymentsAPI } from "../services/api";
+import { CFPaymentGatewayService } from "react-native-cashfree-pg-sdk";
+import {
+    CFSession,
+    CFPaymentComponentBuilder,
+    CFPaymentModes,
+    CFDropCheckoutPayment,
+    CFThemeBuilder,
+    CFEnvironment
+} from "cashfree-pg-api-contract";
+import Svg, { Text as SvgText, Defs, LinearGradient, Stop } from "react-native-svg";
 
 const { width } = Dimensions.get("window");
 
-export default function SubscriptionPage() {
+export default function SubscriptionScreen() {
     const router = useRouter();
-    const insets = useSafeAreaInsets();
     const { isDark } = useTheme();
+    const insets = useSafeAreaInsets();
+    const [loading, setLoading] = useState(false);
+    const [isPro, setIsPro] = useState(false);
+
+    useEffect(() => {
+        checkSubscriptionStatus();
+
+        try {
+            CFPaymentGatewayService.setCallback({
+                onVerify: (orderId: string) => {
+                    console.log("Payment Verified:", orderId);
+                    Alert.alert("Success", "Your payment was successful! You are now a Pro user.");
+                    checkSubscriptionStatus();
+                },
+                onError: (error: any, orderId: string) => {
+                    console.log("Payment Error:", error, orderId);
+                    Alert.alert("Payment Failed", error.getMessage ? error.getMessage() : "Something went wrong.");
+                }
+            });
+        } catch (e) {
+            console.error("Cashfree Callback Error:", e);
+        }
+
+        return () => {
+            try {
+                CFPaymentGatewayService.removeCallback();
+            } catch (e) { }
+        };
+    }, []);
+
+    const checkSubscriptionStatus = async () => {
+        try {
+            const response = await paymentsAPI.checkStatus();
+            setIsPro(response.data.isPro);
+        } catch (error) {
+            console.error("Failed to check subscription:", error);
+        }
+    };
+
+    const handleUpgrade = async () => {
+        try {
+            setLoading(true);
+            const response = await paymentsAPI.createOrder(50);
+            const { payment_session_id, order_id } = response.data;
+
+            const session = new CFSession(payment_session_id, order_id, CFEnvironment.SANDBOX);
+
+            const paymentComponent = new CFPaymentComponentBuilder()
+                .add(CFPaymentModes.CARD)
+                .add(CFPaymentModes.UPI)
+                .add(CFPaymentModes.NB)
+                .add(CFPaymentModes.WALLET)
+                .build();
+
+            const theme = new CFThemeBuilder()
+                .setNavigationBarBackgroundColor(isDark ? "#0F0F23" : "#FFFFFF")
+                .setNavigationBarTextColor(isDark ? "#FFFFFF" : "#000000")
+                .setButtonBackgroundColor(isDark ? "#818cf8" : "#4f46e5")
+                .setButtonTextColor("#FFFFFF")
+                .build();
+
+            const dropCheckoutPayment = new CFDropCheckoutPayment(session, paymentComponent, theme);
+
+            CFPaymentGatewayService.doPayment(dropCheckoutPayment);
+        } catch (error: any) {
+            console.error("Upgrade Error:", error);
+            Alert.alert("Error", "Failed to initiate payment. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const features = [
+        {
+            icon: <Zap size={24} color="#818cf8" />,
+            title: "Real-time AI Analysis",
+            desc: "Get instant insights into your spending habits with our advanced AI assistant."
+        },
+        {
+            icon: <ShieldCheck size={24} color="#818cf8" />,
+            title: "Advanced Reports",
+            desc: "Deep-dive into your finances with custom date ranges and exportable PDF reports."
+        },
+        {
+            icon: <Check size={24} color="#818cf8" />,
+            title: "Unlimited Transactions",
+            desc: "No limits on how many expenses or income entries you can track."
+        }
+    ];
 
     return (
         <View className="flex-1 bg-white dark:bg-background-dark">
-            <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-                {/* Header with Image */}
-                <View className="relative items-center">
-                    <Image
-                        source={require("../assets/subscription.png")}
-                        className="w-full h-80 mt-10"
-                        resizeMode="contain"
-                    />
+            <ScrollView
+                className="flex-1"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+            >
+                {/* Header/Hero Section */}
+                <View className="relative h-72 bg-slate-900 rounded-b-[40px] overflow-hidden justify-center items-center">
+                    <View className="absolute inset-0 opacity-40">
+                        <Svg height="100%" width="100%">
+                            <Defs>
+                                <LinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+                                    <Stop offset="0" stopColor="#4f46e5" stopOpacity="1" />
+                                    <Stop offset="1" stopColor="#818cf8" stopOpacity="0.5" />
+                                </LinearGradient>
+                            </Defs>
+                            <SvgText
+                                fill="url(#grad)"
+                                fontSize="120"
+                                fontWeight="bold"
+                                x="50%"
+                                y="60%"
+                                textAnchor="middle"
+                                opacity="0.1"
+                            >
+                                PRO
+                            </SvgText>
+                        </Svg>
+                    </View>
+
                     <TouchableOpacity
                         onPress={() => router.back()}
-                        style={{ marginTop: insets.top + 10 }}
-                        className="absolute left-6 bg-black/20 dark:bg-white/10 p-2 rounded-full"
+                        className="absolute top-12 left-6 z-10 p-2 bg-white/10 rounded-full"
                     >
-                        <ArrowLeft size={24} color={isDark ? "white" : "black"} />
+                        <ArrowLeft size={24} color="white" />
                     </TouchableOpacity>
+
+                    <Crown size={64} color="#fcd34d" className="mb-4" />
+                    <Text className="text-white text-3xl font-bold tracking-tight">Upgrade to Pro</Text>
+                    <Text className="text-slate-400 mt-2 text-base">Unlock the full power of ExpenseIQ</Text>
                 </View>
 
-                <View className="px-6 py-2">
-                    {/* Title Section */}
-                    <View className="flex-row items-center mb-0">
-                        <Text className="text-4xl font-bold text-slate-900 dark:text-white mr-2">
-                            Expense
-                        </Text>
-                        <View style={{ height: 60, width: 100, justifyContent: 'center' }}>
-                            <Svg height="60" width="100">
-                                <Defs>
-                                    <LinearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
-                                        <Stop offset="0" stopColor="#6366f1" stopOpacity="1" />
-                                        <Stop offset="1" stopColor="#a855f7" stopOpacity="1" />
-                                    </LinearGradient>
-                                </Defs>
-                                <SvgText
-                                    fill="url(#grad)"
-                                    fontSize="40"
-                                    fontWeight="900"
-                                    x="0"
-                                    y="42"
-                                >
-                                    Pro
-                                </SvgText>
-                            </Svg>
-                        </View>
-                    </View>
-
-                    <Text className="text-slate-500 dark:text-slate-400 text-lg mb-8">
-                        Unlock premium features and take full control of your finances.
-                    </Text>
-
-                    {/* Features List */}
-                    <View className="space-y-3 mb-6">
-                        {[
-                            "Unlimited Custom Tags",
-                            "Advanced PDF Reports",
-                            "Unlimited AI Financial Assistant",
-                        ].map((feature, index) => (
-                            <View key={index} className="flex-row items-center mb-3">
-                                <CheckCircle2 size={20} color={isDark ? "white" : "black"} />
-                                <Text className="ml-3 text-slate-700 dark:text-slate-200 font-medium">
-                                    {feature}
-                                </Text>
-                            </View>
-                        ))}
-                    </View>
-
-                    {/* Pricing Plans */}
-                    <View className="space-y-4 gap-4">
-                        {/* Pro Plan */}
-                        <View
-                            className="p-6 rounded-3xl border-2 flex-row items-center justify-between bg-slate-50 dark:bg-slate-800 border-slate-900 dark:border-indigo-500"
-                        >
+                {/* Pricing Card */}
+                <View className="px-6 -mt-10">
+                    <View className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-2xl border border-slate-100 dark:border-slate-700">
+                        <View className="flex-row justify-between items-center mb-6">
                             <View>
-                                <Text className="text-slate-900 dark:text-white text-xl font-bold">Pro Plan</Text>
-                                <Text className="text-slate-500 dark:text-slate-400 text-sm">Billed every month</Text>
+                                <Text className="text-slate-900 dark:text-white text-2xl font-bold">Pro Plan</Text>
+                                <Text className="text-slate-500 dark:text-slate-400 text-sm">Best for personal power users</Text>
                             </View>
-                            <View className="items-end">
-                                <Text className="text-slate-900 dark:text-white text-2xl font-black">₹50</Text>
-                                <Text className="text-slate-500 dark:text-slate-400 text-xs">per month</Text>
+                            <View className="bg-indigo-100 dark:bg-indigo-900/30 px-3 py-1 rounded-full">
+                                <Text className="text-indigo-600 dark:text-indigo-400 font-semibold text-xs">POPULAR</Text>
                             </View>
                         </View>
-                    </View>
 
-                    {/* Action Button */}
-                    <TouchableOpacity
-                        className="bg-slate-900 dark:bg-indigo-600 py-5 rounded-2xl items-center mt-10 shadow-lg"
-                        activeOpacity={0.9}
-                    >
-                        <Text className="text-white font-bold text-lg">
-                            Continue with Pro
+                        <View className="flex-row items-baseline mb-8">
+                            <Text className="text-slate-900 dark:text-white text-5xl font-extrabold">₹50</Text>
+                            <Text className="text-slate-500 dark:text-slate-400 ml-2 text-lg">/ month</Text>
+                        </View>
+
+                        <View className="space-y-4">
+                            {features.map((item, index) => (
+                                <View key={index} className="flex-row items-start">
+                                    <View className="mr-4 mt-1">
+                                        {item.icon}
+                                    </View>
+                                    <View className="flex-1">
+                                        <Text className="text-slate-900 dark:text-white font-bold text-base">{item.title}</Text>
+                                        <Text className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{item.desc}</Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Action Button */}
+                        <TouchableOpacity
+                            className={`mt-10 py-4 rounded-2xl flex-row items-center justify-center ${isPro ? "bg-green-600" : "bg-indigo-600 shadow-lg shadow-indigo-300"}`}
+                            disabled={loading || isPro}
+                            onPress={handleUpgrade}
+                            activeOpacity={0.8}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="white" />
+                            ) : (
+                                <>
+                                    <Crown size={20} color="white" className="mr-2" />
+                                    <Text className="text-white font-bold text-lg">
+                                        {isPro ? "You are Pro!" : "Upgrade for ₹50"}
+                                    </Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <Text className="text-center text-slate-400 dark:text-slate-500 text-xs mt-6 px-4">
+                            One-time or recurring billing options available at checkout. Secure payment via Cashfree.
                         </Text>
-                    </TouchableOpacity>
-
-                    <Text className="text-center text-slate-400 dark:text-slate-500 text-sm mt-6 px-10">
-                        Recurring billing. Cancel anytime in your account settings.
-                    </Text>
+                    </View>
                 </View>
             </ScrollView>
         </View>
     );
 }
-
-
