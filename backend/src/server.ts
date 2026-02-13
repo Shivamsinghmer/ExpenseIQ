@@ -4,6 +4,7 @@ import cors from "cors";
 import transactionRoutes from "./routes/transactions";
 import tagRoutes from "./routes/tags";
 import aiRoutes from "./routes/ai";
+import paymentRoutes from "./routes/payments";
 
 console.log("--- Environment Verification ---");
 console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
@@ -40,6 +41,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/tags", tagRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // 404 handler
 app.use((_req, res) => {
