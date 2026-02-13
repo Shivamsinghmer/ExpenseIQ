@@ -183,24 +183,31 @@ export default function AIChatbot() {
                 </View>
             </View>
 
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                renderItem={renderMessage}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingTop: 20, paddingBottom: 20 }}
-                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                ListFooterComponent={
-                    askMutation.isPending ? (
-                        <View className="flex-row items-center ml-14 mb-4">
-                            <View className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 flex-row items-center shadow-sm">
-                                <ActivityIndicator size="small" color="#000000" />
-                                <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium ml-2">Thinking...</Text>
+            {isLoadingHistory ? (
+                <View className="flex-1 items-center justify-center">
+                    <ActivityIndicator size="large" color={isDark ? "#818cf8" : "#4f46e5"} />
+                    <Text className="text-slate-500 dark:text-slate-400 mt-4 font-medium">Loading conversation...</Text>
+                </View>
+            ) : (
+                <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    renderItem={renderMessage}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={{ paddingTop: 20, paddingBottom: 20 }}
+                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    ListFooterComponent={
+                        askMutation.isPending ? (
+                            <View className="flex-row items-center ml-14 mb-4">
+                                <View className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 flex-row items-center shadow-sm">
+                                    <ActivityIndicator size="small" color={isDark ? "white" : "black"} />
+                                    <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium ml-2">Thinking...</Text>
+                                </View>
                             </View>
-                        </View>
-                    ) : null
-                }
-            />
+                        ) : null
+                    }
+                />
+            )}
 
             {messages.length <= 1 && (
                 <View className="pb-4">

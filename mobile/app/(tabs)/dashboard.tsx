@@ -19,7 +19,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, type SummaryResponse, type Transaction } from "../../services/api";
-import { ArrowDown, ArrowUp, File, TrendingUp, TrendingDown } from "lucide-react-native";
+import { ArrowDown, ArrowUp, File, TrendingUp, TrendingDown, Crown } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 
@@ -54,19 +54,28 @@ function TransactionItem({ item }: { item: Transaction }) {
     );
 }
 
+const escapeHtml = (unsafe: string) => {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
+
 function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) {
     const rows = transactions
         .map(
             (t) => `
         <tr>
-            <td>${new Date(t.date).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}</td>
-            <td>${t.title}</td>
+            <td>${new Date(t.date).toDateString()}</td>
+            <td>${escapeHtml(t.title)}</td>
             <td style="color: ${t.type === "INCOME" ? "#22c55e" : "#ef4444"}; font-weight: bold;">
-                ${t.type === "INCOME" ? "+" : "-"}₹${t.amount.toFixed(2)}
+                ${t.type === "INCOME" ? "+" : "-"} &#8377; ${t.amount.toFixed(2)}
             </td>
             <td>${t.type}</td>
-            <td>${t.tags.map((tag) => tag.name).join(", ") || "-"}</td>
-            <td>${t.notes || "-"}</td>
+            <td>${escapeHtml(t.tags.map((tag) => tag.name).join(", ")) || "-"}</td>
+            <td>${escapeHtml(t.notes || "-")}</td>
         </tr>`
         )
         .join("");
@@ -99,20 +108,20 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
     <body>
         <div class="header">
             <h1>ExpenseIQ</h1>
-            <p>Transaction Report — Generated on ${new Date().toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" })}</p>
+            <p>Transaction Report — Generated on ${new Date().toDateString()}</p>
         </div>
         <div class="summary">
             <div class="summary-card income">
                 <h3>Total Income</h3>
-                <div class="amount">₹${summary.totalIncome.toFixed(2)}</div>
+                <div class="amount">&#8377; ${summary.totalIncome.toFixed(2)}</div>
             </div>
             <div class="summary-card expense">
                 <h3>Total Expenses</h3>
-                <div class="amount">₹${summary.totalExpense.toFixed(2)}</div>
+                <div class="amount">&#8377; ${summary.totalExpense.toFixed(2)}</div>
             </div>
             <div class="summary-card balance">
                 <h3>Balance</h3>
-                <div class="amount">₹${summary.balance.toFixed(2)}</div>
+                <div class="amount">&#8377; ${summary.balance.toFixed(2)}</div>
             </div>
         </div>
         <div class="section-title">All Transactions (${transactions.length})</div>
@@ -184,26 +193,46 @@ export default function Dashboard() {
     const handleDownloadPdf = async () => {
         try {
             setPdfLoading(true);
+            if (!summary) {
+                Alert.alert("Error", "Dashboard data not ready. Please wait.");
+                return;
+            }
+
             const res = await transactionsAPI.getAll({ limit: "9999", page: "1" });
             const allTransactions = res.data.transactions;
-            if (allTransactions.length === 0) {
+
+            if (!allTransactions || allTransactions.length === 0) {
                 Alert.alert("No Data", "No transactions to export.");
                 return;
             }
-            const html = generatePdfHtml(allTransactions, summary!);
-            const { uri } = await Print.printToFileAsync({ html });
+
+            console.log(`[PDF] Generating report for ${allTransactions.length} transactions`);
+            const html = generatePdfHtml(allTransactions, summary);
+            const { uri } = await Print.printToFileAsync({
+                html,
+                base64: false
+            });
+
+            console.log("[PDF] File generated at:", uri);
+
             if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(uri, {
+                const options: Sharing.SharingOptions = {
                     mimeType: "application/pdf",
                     dialogTitle: "ExpenseIQ Transactions Report",
-                    UTI: "com.adobe.pdf",
-                });
+                };
+
+                // UTI is only for iOS
+                if (Platform.OS === "ios") {
+                    options.UTI = "com.adobe.pdf";
+                }
+
+                await Sharing.shareAsync(uri, options);
             } else {
                 Alert.alert("Success", `PDF saved to: ${uri}`);
             }
         } catch (error: any) {
-            Alert.alert("Error", "Failed to generate PDF. Please try again.");
             console.error("PDF generation error:", error);
+            Alert.alert("Error", `Failed to generate PDF: ${error.message || "Unknown error"}`);
         } finally {
             setPdfLoading(false);
         }
@@ -233,26 +262,43 @@ export default function Dashboard() {
                 style={{ paddingTop: insets.top + 20 }}
             >
                 <View className="flex-row items-center justify-between mb-8">
-                    <View>
-                        <Text className="text-black/60 dark:text-white/60 text-sm font-bold uppercase tracking-widest mb-1">Total Balance</Text>
-                        <Text className="text-black dark:text-white text-5xl font-black">₹{summary?.balance.toFixed(2) || "0.00"}</Text>
-                    </View>
-                    <TouchableOpacity
-                        onPress={() => {
-                            Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-                                { text: "Cancel", style: "cancel" },
-                                { text: "Sign Out", style: "destructive", onPress: () => signOut() },
-                            ]);
-                        }}
-                        className="bg-black/10 dark:bg-white/20 p-3 rounded-full items-center justify-center"
-                        accessibilityLabel="Sign Out"
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        className="flex-1 mr-4"
                     >
-                        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={isDark ? "white" : "black"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                            <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                            <Path d="M16 17l5-5-5-5" />
-                            <Path d="M21 12H9" />
-                        </Svg>
-                    </TouchableOpacity>
+                        <View>
+                            <Text className="text-black/60 dark:text-white/60 text-sm font-bold uppercase tracking-widest mb-1">Total Balance</Text>
+                            <Text className="text-black dark:text-white text-5xl font-black">₹{summary?.balance.toFixed(2) || "0.00"}</Text>
+                        </View>
+                    </ScrollView>
+                    <View className="flex-row items-center gap-2">
+                        <TouchableOpacity
+                            onPress={() => {
+                                router.push("/subscription");
+                            }}
+                            className="bg-black/10 dark:bg-white/20 p-[10px] rounded-full items-center justify-center"
+                            accessibilityLabel="Premium"
+                        >
+                            <Crown size={22} color={isDark ? "white" : "black"} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => {
+                                Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Sign Out", style: "destructive", onPress: () => signOut() },
+                                ]);
+                            }}
+                            className="bg-black/10 dark:bg-white/20 p-[10px] rounded-full items-center justify-center"
+                            accessibilityLabel="Sign Out"
+                        >
+                            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={isDark ? "white" : "black"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                <Path d="M16 17l5-5-5-5" />
+                                <Path d="M21 12H9" />
+                            </Svg>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* Quick Stats (Income/Expense) */}
