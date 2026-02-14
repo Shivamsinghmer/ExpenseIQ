@@ -47,7 +47,7 @@ export default function SignUp() {
             const result = await signUp.attemptEmailAddressVerification({ code });
             if (result.status === "complete") {
                 if (setActive) await setActive({ session: result.createdSessionId });
-                router.replace("/(tabs)/index");
+                router.replace("/(tabs)/dashboard");
             } else {
                 console.error("Sign up incomplete:", result);
             }

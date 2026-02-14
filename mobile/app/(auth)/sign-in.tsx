@@ -67,7 +67,7 @@ export default function SignIn() {
 
                 if (result.status === "complete") {
                     if (setActive) await setActive({ session: result.createdSessionId });
-                    router.replace("/(tabs)/index");
+                    router.replace("/(tabs)/dashboard");
                 } else {
                     console.log("2FA Incomplete:", result);
                     setError("Verification failed. Please check the code.");
@@ -80,7 +80,7 @@ export default function SignIn() {
 
                 if (result.status === "complete") {
                     if (setActive) await setActive({ session: result.createdSessionId });
-                    router.replace("/(tabs)");
+                    router.replace("/(tabs)/dashboard");
                 } else if (result.status === "needs_second_factor") {
                     console.log("2FA required. Available factors:", result.supportedSecondFactors);
 
