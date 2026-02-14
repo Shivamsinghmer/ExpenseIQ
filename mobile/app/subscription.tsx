@@ -172,7 +172,7 @@ export default function SubscriptionScreen() {
                             <Text className="text-slate-500 dark:text-slate-400 ml-2 text-lg">/ month</Text>
                         </View>
 
-                        <View className="space-y-4">
+                        <View className="space-y-4 gap-5">
                             {features.map((item, index) => (
                                 <View key={index} className="flex-row items-start">
                                     <View className="mr-4 mt-1">
@@ -188,7 +188,7 @@ export default function SubscriptionScreen() {
 
                         {/* Action Button */}
                         <TouchableOpacity
-                            className={`mt-10 py-4 rounded-2xl flex-row items-center justify-center ${isPro ? "bg-green-600" : "bg-indigo-600 shadow-lg shadow-indigo-300"}`}
+                            className={`mt-10 py-4 rounded-2xl gap-3 flex-row items-center justify-center ${isPro ? "bg-green-600" : "bg-black shadow-lg shadow-indigo-300"}`}
                             disabled={loading || isPro}
                             onPress={handleUpgrade}
                             activeOpacity={0.8}
@@ -197,7 +197,7 @@ export default function SubscriptionScreen() {
                                 <ActivityIndicator color="white" />
                             ) : (
                                 <>
-                                    <Crown size={20} color="white" className="mr-2" />
+                                    <Crown size={20} color="white" className="gap-10" />
                                     <Text className="text-white font-bold text-lg">
                                         {isPro ? "You are Pro!" : "Upgrade for ₹50"}
                                     </Text>
@@ -205,7 +205,7 @@ export default function SubscriptionScreen() {
                             )}
                         </TouchableOpacity>
 
-                        <Text className="text-center text-slate-400 dark:text-slate-500 text-xs mt-6 px-4">
+                        <Text className="text-center text-slate-400 dark:text-slate-500 text-sm mt-6 px-4">
                             One-time or recurring billing options available at checkout. Secure payment via Cashfree.
                         </Text>
                     </View>
