@@ -24,6 +24,7 @@ export default function SubscriptionScreen() {
     const insets = useSafeAreaInsets();
     const [loading, setLoading] = useState(false);
     const [isPro, setIsPro] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('monthly');
 
     useEffect(() => {
         checkSubscriptionStatus();
@@ -63,7 +64,8 @@ export default function SubscriptionScreen() {
     const handleUpgrade = async () => {
         try {
             setLoading(true);
-            const response = await paymentsAPI.createOrder(50);
+            const amount = selectedPlan === 'monthly' ? 50 : 600;
+            const response = await paymentsAPI.createOrder(amount);
             const { payment_session_id, order_id } = response.data;
 
             const session = new CFSession(payment_session_id, order_id, CFEnvironment.SANDBOX);
@@ -167,9 +169,33 @@ export default function SubscriptionScreen() {
                             </View>
                         </View>
 
+                        {/* Plan Toggle */}
+                        <View className="flex-row bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl mb-6">
+                            <TouchableOpacity
+                                onPress={() => setSelectedPlan('monthly')}
+                                className={`flex-1 py-2 px-4 rounded-lg items-center ${selectedPlan === 'monthly' ? 'bg-white dark:bg-slate-600 shadow-sm' : ''}`}
+                            >
+                                <Text className={`font-semibold ${selectedPlan === 'monthly' ? 'text-indigo-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+                                    Monthly
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => setSelectedPlan('annual')}
+                                className={`flex-1 py-2 px-4 rounded-lg items-center ${selectedPlan === 'annual' ? 'bg-white dark:bg-slate-600 shadow-sm' : ''}`}
+                            >
+                                <Text className={`font-semibold ${selectedPlan === 'annual' ? 'text-indigo-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+                                    Annual
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
                         <View className="flex-row items-baseline mb-8">
-                            <Text className="text-slate-900 dark:text-white text-5xl font-extrabold">₹50</Text>
-                            <Text className="text-slate-500 dark:text-slate-400 ml-2 text-lg">/ month</Text>
+                            <Text className="text-slate-900 dark:text-white text-5xl font-extrabold">
+                                {selectedPlan === 'monthly' ? '₹50' : '₹600'}
+                            </Text>
+                            <Text className="text-slate-500 dark:text-slate-400 ml-2 text-lg">
+                                {selectedPlan === 'monthly' ? '/ month' : '/ year'}
+                            </Text>
                         </View>
 
                         <View className="space-y-4 gap-5">
@@ -199,7 +225,7 @@ export default function SubscriptionScreen() {
                                 <>
                                     <Crown size={20} color="white" className="gap-10" />
                                     <Text className="text-white font-bold text-lg">
-                                        {isPro ? "You are Pro!" : "Upgrade for ₹50"}
+                                        {isPro ? "You are Pro!" : `Upgrade for ${selectedPlan === 'monthly' ? '₹50' : '₹600'}`}
                                     </Text>
                                 </>
                             )}
