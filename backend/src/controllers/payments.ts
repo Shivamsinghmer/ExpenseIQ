@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Cashfree, CFEnvironment } from "cashfree-pg";
 import prisma from "../services/prisma";
 import { AuthenticatedRequest } from "../middleware/auth";
+import { getOrCreateUser } from "../services/userService";
 
 // Initialize Cashfree
 const cashfree = new Cashfree(
@@ -73,7 +74,9 @@ export async function verifyPayment(req: AuthenticatedRequest, res: Response): P
                         where: { id: order.userId },
                         data: {
                             isPro: true,
-                            proExpiresAt: expiryDate
+                            proExpiresAt: expiryDate,
+                            subscriptionStartDate: new Date(),
+                            subscriptionEndDate: expiryDate
                         },
                     }),
                 ]);
@@ -283,7 +286,9 @@ export async function webhook(req: Request, res: Response): Promise<void> {
                         where: { id: order.userId },
                         data: {
                             isPro: true,
-                            proExpiresAt: expiryDate
+                            proExpiresAt: expiryDate,
+                            subscriptionStartDate: new Date(),
+                            subscriptionEndDate: expiryDate
                         },
                     }),
                 ]);
@@ -307,6 +312,7 @@ export async function webhook(req: Request, res: Response): Promise<void> {
     }
 }
 
+
 export async function getPaymentStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
         if (!req.clerkUserId) {
@@ -314,15 +320,16 @@ export async function getPaymentStatus(req: AuthenticatedRequest, res: Response)
             return;
         }
 
-        const user = await prisma.user.findUnique({
-            where: { clerkUserId: req.clerkUserId },
-            select: { isPro: true, proExpiresAt: true },
-        });
+        const user = await getOrCreateUser(req.clerkUserId);
+
         res.json({
-            isPro: user?.isPro || false,
-            proExpiresAt: user?.proExpiresAt || null
+            isPro: user.isPro,
+            proExpiresAt: user.proExpiresAt,
+            trialStartDate: user.trialStartDate,
+            trialEndDate: user.trialEndDate
         });
     } catch (error) {
+        console.error("Get Payment Status Error:", error);
         res.status(500).json({ error: "Failed to fetch status" });
     }
 }

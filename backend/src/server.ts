@@ -1,20 +1,16 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import os from "os";
 import transactionRoutes from "./routes/transactions";
 import tagRoutes from "./routes/tags";
 import aiRoutes from "./routes/ai";
 import paymentRoutes from "./routes/payments";
 
 console.log("--- Environment Verification ---");
-console.log("Server restarting to apply database schema changes...");
+console.log("Server restarting...");
 console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`PORT: ${process.env.PORT}`);
-console.log(`GROQ_API_KEY: ${process.env.GROQ_API_KEY ? "LOADED (Starts with " + process.env.GROQ_API_KEY.substring(0, 4) + ")" : "MISSING"}`);
-console.log(`CLERK_SECRET_KEY: ${process.env.CLERK_SECRET_KEY ? "LOADED" : "MISSING"}`);
-console.log(`CASHFREE_APP_ID: ${process.env.CASHFREE_APP_ID ? "LOADED" : "MISSING"}`);
-console.log(`CASHFREE_SECRET_KEY: ${process.env.CASHFREE_SECRET_KEY ? "LOADED" : "MISSING"}`);
-console.log(`BACKEND_URL: ${process.env.BACKEND_URL || "MISSING"}`);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -38,7 +34,7 @@ app.use((req, _res, next) => {
 
 // Health check
 app.get("/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    res.json({ status: "ok", timestamp: new Date().toISOString(), version: "v3" });
 });
 
 // API Routes
@@ -57,10 +53,6 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
     console.error("Unhandled error:", err);
     res.status(500).json({ error: "Internal server error" });
 });
-
-import os from "os";
-
-// ... existing code ...
 
 const getLocalIP = () => {
     const interfaces = os.networkInterfaces();

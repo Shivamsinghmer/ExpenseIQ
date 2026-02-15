@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, Pressable, Image, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from "react-native";
 import { useTheme } from "../providers/theme-provider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, Crown, ShieldCheck, Zap, ArrowLeft, CheckCircle2 } from "lucide-react-native";
-import { useRouter, useNavigation } from "expo-router";
+import { useRouter, useNavigation, useFocusEffect } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { paymentsAPI, setAuthToken } from "../services/api";
 import { CFPaymentGatewayService } from "react-native-cashfree-pg-sdk";
@@ -29,6 +29,8 @@ export default function SubscriptionScreen() {
     const [expiresAt, setExpiresAt] = useState<string | null>(null);
     const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('monthly');
 
+    const [trialEndDate, setTrialEndDate] = useState<string | null>(null);
+
     const { getToken } = useAuth(); // NEW: Hook to access token
 
     const handleBack = () => {
@@ -49,13 +51,52 @@ export default function SubscriptionScreen() {
             const response = await paymentsAPI.checkStatus();
             setIsPro(response.data.isPro);
             setExpiresAt(response.data.proExpiresAt || null);
+            setTrialEndDate(response.data.trialEndDate || null);
         } catch (error) {
             console.error("Failed to check subscription:", error);
         }
     };
 
+    const getTrialStatus = () => {
+        if (isPro) return null;
+
+        // DEBUG: If trialEndDate is missing, show a warning or handle it.
+        if (!trialEndDate) {
+            // For debugging purposes, if we think they SHOULD have a trial but don't:
+            // return { active: false, message: "No Trial Data" }; 
+            return null;
+        }
+
+        const end = new Date(trialEndDate);
+        const now = new Date();
+        const diffMs = end.getTime() - now.getTime();
+
+        if (diffMs <= 0) return { active: false, message: "Free Trial Expired" };
+
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+        let timeString = "";
+        if (diffDays > 0) {
+            timeString = `${diffDays}d ${diffHours}h`;
+        } else {
+            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            timeString = `${diffHours}h ${diffMinutes}m`;
+        }
+
+        return { active: true, message: `Free Trial Active • Ends in ${timeString}` };
+    };
+
+    const trialStatus = getTrialStatus();
+
+    useFocusEffect(
+        useCallback(() => {
+            checkSubscriptionStatus();
+        }, [])
+    );
+
     useEffect(() => {
-        checkSubscriptionStatus();
+        // MOVED TO useFocusEffect: checkSubscriptionStatus();
 
         if (Platform.OS !== 'web') {
             try {
@@ -191,11 +232,28 @@ export default function SubscriptionScreen() {
                     </View>
                     <Text className="text-white text-3xl font-bold tracking-tight">Upgrade to Pro</Text>
                     <Text className="text-slate-400 mt-2 text-base">Unlock the full power of ExpenseIQ</Text>
+
+
                 </View>
 
                 {/* Pricing Card */}
                 <View className="px-6 -mt-10">
                     <View className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-2xl border border-slate-100 dark:border-slate-700">
+
+                        {/* Trial Status Banner */}
+                        {trialStatus && (
+                            <View className={`mb-6 p-3 rounded-xl flex-row items-center justify-center ${trialStatus.active ? "bg-indigo-100 dark:bg-indigo-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
+                                {trialStatus.active ? (
+                                    <CheckCircle2 size={18} color={isDark ? "#818cf8" : "#4f46e5"} className="mr-2" />
+                                ) : (
+                                    <View className="w-2 h-2 rounded-full bg-red-500 mr-2" />
+                                )}
+                                <Text className={`font-bold text-sm ${trialStatus.active ? "text-indigo-700 dark:text-indigo-300" : "text-red-700 dark:text-red-300"}`}>
+                                    {trialStatus.message}
+                                </Text>
+                            </View>
+                        )}
+
                         <View className="flex-row justify-between items-center mb-6">
                             <View>
                                 <Text className="text-slate-900 dark:text-white text-2xl font-bold">Pro Plan</Text>
@@ -239,7 +297,7 @@ export default function SubscriptionScreen() {
 
                         <View className="space-y-4 gap-5">
                             {features.map((item, index) => (
-                                <View key={index} className="flex-row items-start">
+                                <View key={index} className="flex-row items-start features-item">
                                     <View className="mr-4 mt-1">
                                         {item.icon}
                                     </View>

@@ -20,8 +20,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TrendingDown, TrendingUp, CalendarDays, FileText, StickyNote, Check, ChevronRight } from "lucide-react-native";
 
+import { useRouter } from "expo-router";
+
 export default function AddTransaction() {
     const queryClient = useQueryClient();
+    const router = useRouter();
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const [title, setTitle] = useState("");
@@ -48,7 +51,18 @@ export default function AddTransaction() {
             Alert.alert("Success", "Transaction added successfully!");
         },
         onError: (error: any) => {
-            Alert.alert("Error", error.response?.data?.error || "Failed to add transaction");
+            if (error.response?.status === 403 && error.response?.data?.message?.includes("Trial expired")) {
+                Alert.alert(
+                    "Trial Expired",
+                    "Your free trial has ended. Upgrade to Pro to continue using all features.",
+                    [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Upgrade", onPress: () => router.push("/subscription") }
+                    ]
+                );
+            } else {
+                Alert.alert("Error", error.response?.data?.error || "Failed to add transaction");
+            }
         },
     });
 

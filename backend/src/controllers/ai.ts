@@ -3,19 +3,11 @@ import { z } from "zod";
 import prisma from "../services/prisma";
 import { getAIResponse } from "../services/groq";
 import { AuthenticatedRequest } from "../middleware/auth";
+import { getOrCreateUser, checkUserAccess } from "../services/userService";
 
 const questionSchema = z.object({
     question: z.string().min(1, "Question is required").max(500),
 });
-
-// Helper to get or create user
-async function getOrCreateUser(clerkUserId: string) {
-    let user = await prisma.user.findUnique({ where: { clerkUserId } });
-    if (!user) {
-        user = await prisma.user.create({ data: { clerkUserId } });
-    }
-    return user;
-}
 
 // Parse intent from question to determine date filters
 function parseIntent(question: string): { startDate?: Date; endDate?: Date; type?: string } {
@@ -105,6 +97,15 @@ export async function askQuestion(
     try {
         console.log(`AI Controller: Processing question for Clerk User: ${req.clerkUserId}`);
         const user = await getOrCreateUser(req.clerkUserId!);
+
+        const access = checkUserAccess(user);
+        if (access === "expired") {
+            res.status(403).json({
+                message: "Trial expired. Please upgrade to Pro to use this feature."
+            });
+            return;
+        }
+
         console.log(`AI Controller: Database User ID: ${user.id}`);
 
         const { question } = questionSchema.parse(req.body);
@@ -262,6 +263,15 @@ export async function clearChatHistory(
 ): Promise<void> {
     try {
         const user = await getOrCreateUser(req.clerkUserId!);
+
+        const access = checkUserAccess(user);
+        if (access === "expired") {
+            res.status(403).json({
+                message: "Trial expired. Please upgrade to Pro to use this feature."
+            });
+            return;
+        }
+
         await prisma.chatMessage.deleteMany({
             where: { userId: user.id }
         });
