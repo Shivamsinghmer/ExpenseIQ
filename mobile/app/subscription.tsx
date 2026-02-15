@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from "react-native";
+import { View, Text, Pressable, Image, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from "react-native";
 import { useTheme } from "../providers/theme-provider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, Crown, ShieldCheck, Zap, ArrowLeft, CheckCircle2 } from "lucide-react-native";
-import { useRouter } from "expo-router";
-import { paymentsAPI } from "../services/api";
+import { useRouter, useNavigation } from "expo-router";
+import { useAuth } from "@clerk/clerk-expo";
+import { paymentsAPI, setAuthToken } from "../services/api";
 import { CFPaymentGatewayService } from "react-native-cashfree-pg-sdk";
 import {
     CFSession,
@@ -20,51 +21,85 @@ const { width } = Dimensions.get("window");
 
 export default function SubscriptionScreen() {
     const router = useRouter();
+    const navigation = useNavigation();
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const [loading, setLoading] = useState(false);
     const [isPro, setIsPro] = useState(false);
+    const [expiresAt, setExpiresAt] = useState<string | null>(null);
     const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('monthly');
 
-    useEffect(() => {
-        checkSubscriptionStatus();
+    const { getToken } = useAuth(); // NEW: Hook to access token
 
-        try {
-            CFPaymentGatewayService.setCallback({
-                onVerify: (orderId: string) => {
-                    console.log("Payment Verified:", orderId);
-                    Alert.alert("Success", "Your payment was successful! You are now a Pro user.");
-                    checkSubscriptionStatus();
-                },
-                onError: (error: any, orderId: string) => {
-                    console.log("Payment Error:", error, orderId);
-                    Alert.alert("Payment Failed", error.getMessage ? error.getMessage() : "Something went wrong.");
-                }
-            });
-        } catch (e) {
-            console.error("Cashfree Callback Error:", e);
+    const handleBack = () => {
+        if (navigation.canGoBack()) {
+            router.back();
+        } else {
+            router.replace("/(tabs)/dashboard");
         }
-
-        return () => {
-            try {
-                CFPaymentGatewayService.removeCallback();
-            } catch (e) { }
-        };
-    }, []);
+    };
 
     const checkSubscriptionStatus = async () => {
         try {
+            // Ensure token is set before calling API
+            const token = await getToken();
+            if (token) {
+                setAuthToken(token); // Update API client with fresh token
+            }
             const response = await paymentsAPI.checkStatus();
             setIsPro(response.data.isPro);
+            setExpiresAt(response.data.proExpiresAt || null);
         } catch (error) {
             console.error("Failed to check subscription:", error);
         }
     };
 
+    useEffect(() => {
+        checkSubscriptionStatus();
+
+        if (Platform.OS !== 'web') {
+            try {
+                CFPaymentGatewayService.setCallback({
+                    onVerify: async (orderId: string) => {
+                        console.log("Payment Verified (Client):", orderId);
+                        try {
+                            // Ensure token is available for verification as well
+                            const token = await getToken();
+                            if (token) setAuthToken(token);
+
+                            // Call verification API
+                            await paymentsAPI.verifyOrder(orderId);
+                            Alert.alert("Success", "Your payment was successful! You are now a Pro user.");
+                            await checkSubscriptionStatus();
+                            handleBack(); // Go back to dashboard on success
+                        } catch (err) {
+                            console.error("Verification failed:", err);
+                            Alert.alert("Payment Received", "Processing your membership. Please check back in a moment.");
+                        }
+                    },
+                    onError: (error: any, orderId: string) => {
+                        console.log("Payment Error:", error, orderId);
+                        Alert.alert("Payment Failed", error.getMessage ? error.getMessage() : "Something went wrong.");
+                    }
+                });
+            } catch (e) {
+                console.error("Cashfree Callback Error:", e);
+            }
+        }
+
+        return () => {
+            if (Platform.OS !== 'web') {
+                try {
+                    CFPaymentGatewayService.removeCallback();
+                } catch (e) { }
+            }
+        };
+    }, []);
+
     const handleUpgrade = async () => {
         try {
             setLoading(true);
-            const amount = selectedPlan === 'monthly' ? 50 : 600;
+            const amount = selectedPlan === 'monthly' ? 50 : 500;
             const response = await paymentsAPI.createOrder(amount);
             const { payment_session_id, order_id } = response.data;
 
@@ -144,14 +179,16 @@ export default function SubscriptionScreen() {
                         </Svg>
                     </View>
 
-                    <TouchableOpacity
-                        onPress={() => router.back()}
+                    <Pressable
+                        onPress={handleBack}
                         className="absolute top-12 left-6 z-10 p-2 bg-white/10 rounded-full"
                     >
                         <ArrowLeft size={24} color="white" />
-                    </TouchableOpacity>
+                    </Pressable>
 
-                    <Crown size={64} color="#fcd34d" className="mb-4" />
+                    <View className="mb-4">
+                        <Crown size={64} color="#fcd34d" />
+                    </View>
                     <Text className="text-white text-3xl font-bold tracking-tight">Upgrade to Pro</Text>
                     <Text className="text-slate-400 mt-2 text-base">Unlock the full power of ExpenseIQ</Text>
                 </View>
@@ -171,27 +208,29 @@ export default function SubscriptionScreen() {
 
                         {/* Plan Toggle */}
                         <View className="flex-row bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl mb-6">
-                            <TouchableOpacity
+                            <Pressable
                                 onPress={() => setSelectedPlan('monthly')}
-                                className={`flex-1 py-2 px-4 rounded-lg items-center ${selectedPlan === 'monthly' ? 'bg-white dark:bg-slate-600 shadow-sm' : ''}`}
+                                className="flex-1 py-2 px-4 rounded-lg items-center"
+                                style={selectedPlan === 'monthly' ? { backgroundColor: isDark ? '#475569' : '#FFFFFF', shadowOpacity: 0.1, shadowRadius: 2 } : {}}
                             >
                                 <Text className={`font-semibold ${selectedPlan === 'monthly' ? 'text-indigo-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
                                     Monthly
                                 </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
+                            </Pressable>
+                            <Pressable
                                 onPress={() => setSelectedPlan('annual')}
-                                className={`flex-1 py-2 px-4 rounded-lg items-center ${selectedPlan === 'annual' ? 'bg-white dark:bg-slate-600 shadow-sm' : ''}`}
+                                className="flex-1 py-2 px-4 rounded-lg items-center"
+                                style={selectedPlan === 'annual' ? { backgroundColor: isDark ? '#475569' : '#FFFFFF', shadowOpacity: 0.1, shadowRadius: 2 } : {}}
                             >
                                 <Text className={`font-semibold ${selectedPlan === 'annual' ? 'text-indigo-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
                                     Annual
                                 </Text>
-                            </TouchableOpacity>
+                            </Pressable>
                         </View>
 
                         <View className="flex-row items-baseline mb-8">
                             <Text className="text-slate-900 dark:text-white text-5xl font-extrabold">
-                                {selectedPlan === 'monthly' ? '₹50' : '₹600'}
+                                {selectedPlan === 'monthly' ? '₹50' : '₹500'}
                             </Text>
                             <Text className="text-slate-500 dark:text-slate-400 ml-2 text-lg">
                                 {selectedPlan === 'monthly' ? '/ month' : '/ year'}
@@ -213,23 +252,37 @@ export default function SubscriptionScreen() {
                         </View>
 
                         {/* Action Button */}
-                        <TouchableOpacity
+                        <Pressable
                             className={`mt-10 py-4 rounded-2xl gap-3 flex-row items-center justify-center ${isPro ? "bg-green-600" : "bg-black shadow-lg shadow-indigo-300"}`}
                             disabled={loading || isPro}
                             onPress={handleUpgrade}
-                            activeOpacity={0.8}
                         >
                             {loading ? (
                                 <ActivityIndicator color="white" />
                             ) : (
                                 <>
-                                    <Crown size={20} color="white" className="gap-10" />
-                                    <Text className="text-white font-bold text-lg">
-                                        {isPro ? "You are Pro!" : `Upgrade for ${selectedPlan === 'monthly' ? '₹50' : '₹600'}`}
-                                    </Text>
+                                    <View className="gap-10">
+                                        <Crown size={20} color="white" />
+                                    </View>
+                                    <View>
+                                        <Text className="text-white font-bold text-lg text-center">
+                                            {isPro ? "You are Pro!" : `Upgrade for ${selectedPlan === 'monthly' ? '₹50' : '₹500'}`}
+                                        </Text>
+                                        {isPro && expiresAt && (
+                                            <Text className="text-white/80 text-sm font-medium mt-1 text-center">
+                                                {(() => {
+                                                    const expiryDate = new Date(expiresAt);
+                                                    const daysRemaining = Math.ceil((expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                                                    return daysRemaining > 0
+                                                        ? `${daysRemaining} days remaining`
+                                                        : `Expires on ${expiryDate.toLocaleDateString()}`;
+                                                })()}
+                                            </Text>
+                                        )}
+                                    </View>
                                 </>
                             )}
-                        </TouchableOpacity>
+                        </Pressable>
 
                         <Text className="text-center text-slate-400 dark:text-slate-500 text-sm mt-6 px-4">
                             One-time or recurring billing options available at checkout. Secure payment via Cashfree.

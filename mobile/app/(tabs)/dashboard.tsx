@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { useTheme } from "../../providers/theme-provider";
-import { transactionsAPI, type SummaryResponse, type Transaction } from "../../services/api";
+import { transactionsAPI, paymentsAPI, type SummaryResponse, type Transaction } from "../../services/api";
 import { ArrowDown, ArrowUp, File, TrendingUp, TrendingDown, Crown } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -182,6 +182,17 @@ export default function Dashboard() {
         },
     });
 
+    const {
+        data: subscription,
+        refetch: refetchSubscription,
+    } = useQuery({
+        queryKey: ["subscriptionStatus"],
+        queryFn: async () => {
+            const res = await paymentsAPI.checkStatus();
+            return res.data;
+        },
+    });
+
     // Prepare Chart Data
     const chartDates = summary?.chartData?.map((d) => {
         const date = new Date(d.date);
@@ -247,13 +258,33 @@ export default function Dashboard() {
         );
     }
 
+    const handleProPress = () => {
+        if (subscription?.isPro) {
+            const daysLeft = subscription.proExpiresAt
+                ? Math.ceil((new Date(subscription.proExpiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                : 0;
+
+            Alert.alert(
+                "Pro Subscription",
+                `You are a Pro member!\n\n${daysLeft > 0 ? `Your subscription expires in ${daysLeft} days.` : "Your subscription is active."}`,
+                [{ text: "OK" }]
+            );
+        } else {
+            router.push("/subscription");
+        }
+    };
+
+    // Combine refresh
+    const handleRefresh = async () => {
+        await Promise.all([refetch(), refetchSubscription()]);
+    };
 
     return (
         <ScrollView
             className="flex-1 bg-background dark:bg-background-dark"
             contentContainerStyle={{ paddingBottom: 120 }}
             refreshControl={
-                <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={isDark ? "#818cf8" : "#6366f1"} />
+                <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor={isDark ? "#818cf8" : "#6366f1"} />
             }
         >
             {/* Header Section */}
@@ -274,13 +305,15 @@ export default function Dashboard() {
                     </ScrollView>
                     <View className="flex-row items-center gap-2">
                         <TouchableOpacity
-                            onPress={() => {
-                                router.push("/subscription");
-                            }}
-                            className="bg-black/10 dark:bg-white/20 p-[10px] rounded-full items-center justify-center"
+                            onPress={handleProPress}
+                            className={`p-[10px] rounded-full items-center justify-center ${subscription?.isPro ? "bg-indigo-100 dark:bg-indigo-900/30" : "bg-black/10 dark:bg-white/20"}`}
                             accessibilityLabel="Premium"
                         >
-                            <Crown size={22} color={isDark ? "white" : "black"} />
+                            {subscription?.isPro ? (
+                                <Text className="font-bold text-indigo-600 dark:text-indigo-400 text-xs">PRO</Text>
+                            ) : (
+                                <Crown size={22} color={isDark ? "white" : "black"} />
+                            )}
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => {
