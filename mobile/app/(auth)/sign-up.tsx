@@ -47,7 +47,7 @@ export default function SignUp() {
             const result = await signUp.attemptEmailAddressVerification({ code });
             if (result.status === "complete") {
                 if (setActive) await setActive({ session: result.createdSessionId });
-                router.replace("/(tabs)/dashboard");
+                router.replace("/trial-started");
             } else {
                 console.error("Sign up incomplete:", result);
             }
@@ -70,7 +70,7 @@ export default function SignUp() {
             const { createdSessionId, setActive } = await startOAuthFlow({ redirectUrl });
             if (createdSessionId && setActive) {
                 await setActive({ session: createdSessionId });
-                router.replace("/(tabs)/dashboard");
+                router.replace("/trial-started");
             }
         } catch (err) {
             console.error("OAuth error", err);

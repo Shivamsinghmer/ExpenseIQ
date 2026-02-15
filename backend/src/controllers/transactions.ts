@@ -2,6 +2,7 @@ import { Response } from "express";
 import { z } from "zod";
 import prisma from "../services/prisma";
 import { AuthenticatedRequest } from "../middleware/auth";
+import { getOrCreateUser, checkUserAccess } from "../services/userService";
 
 // Validation schemas
 const createTransactionSchema = z.object({
@@ -24,15 +25,6 @@ const querySchema = z.object({
     limit: z.string().optional(),
     search: z.string().optional(),
 });
-
-// Helper to get or create user
-async function getOrCreateUser(clerkUserId: string) {
-    let user = await prisma.user.findUnique({ where: { clerkUserId } });
-    if (!user) {
-        user = await prisma.user.create({ data: { clerkUserId } });
-    }
-    return user;
-}
 
 // GET all transactions
 export async function getTransactions(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -116,6 +108,15 @@ export async function getTransaction(req: AuthenticatedRequest, res: Response): 
 export async function createTransaction(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
         const user = await getOrCreateUser(req.clerkUserId!);
+
+        const access = checkUserAccess(user);
+        if (access === "expired") {
+            res.status(403).json({
+                message: "Trial expired. Please upgrade to Pro to use this feature."
+            });
+            return;
+        }
+
         const data = createTransactionSchema.parse(req.body);
 
         const transaction = await prisma.transaction.create({
@@ -148,6 +149,15 @@ export async function createTransaction(req: AuthenticatedRequest, res: Response
 export async function updateTransaction(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
         const user = await getOrCreateUser(req.clerkUserId!);
+
+        const access = checkUserAccess(user);
+        if (access === "expired") {
+            res.status(403).json({
+                message: "Trial expired. Please upgrade to Pro to use this feature."
+            });
+            return;
+        }
+
         const { id } = req.params;
         const data = updateTransactionSchema.parse(req.body);
 
@@ -192,6 +202,15 @@ export async function updateTransaction(req: AuthenticatedRequest, res: Response
 export async function deleteTransaction(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
         const user = await getOrCreateUser(req.clerkUserId!);
+
+        const access = checkUserAccess(user);
+        if (access === "expired") {
+            res.status(403).json({
+                message: "Trial expired. Please upgrade to Pro to use this feature."
+            });
+            return;
+        }
+
         const { id } = req.params;
 
         const existing = await prisma.transaction.findFirst({

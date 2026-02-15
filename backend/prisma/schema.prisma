@@ -12,15 +12,19 @@ enum TransactionType {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  clerkUserId  String        @unique
-  isPro        Boolean       @default(false)
-  proExpiresAt DateTime?
-  createdAt    DateTime      @default(now())
-  transactions Transaction[]
-  tags         Tag[]
-  chatMessages ChatMessage[]
-  orders       Order[]
+  id                    String        @id @default(cuid())
+  clerkUserId           String        @unique
+  isPro                 Boolean       @default(false)
+  proExpiresAt          DateTime?
+  trialStartDate        DateTime?     @default(now())
+  trialEndDate          DateTime?
+  subscriptionStartDate DateTime?
+  subscriptionEndDate   DateTime?
+  createdAt             DateTime      @default(now())
+  transactions          Transaction[]
+  tags                  Tag[]
+  chatMessages          ChatMessage[]
+  orders                Order[]
 }
 
 model Order {

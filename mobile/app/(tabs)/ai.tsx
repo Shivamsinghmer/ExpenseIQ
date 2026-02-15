@@ -44,7 +44,10 @@ const FormattedText = ({ text, isUser, isDark }: { text: string; isUser: boolean
     );
 };
 
+import { useRouter } from "expo-router";
+
 export default function AIChatbot() {
+    const router = useRouter();
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const queryClient = useQueryClient();
@@ -86,13 +89,30 @@ export default function AIChatbot() {
             }]);
         },
         onError: (error: any) => {
-            console.error("AI Mutation Error:", error);
-            console.error("Error Response:", error.response?.data);
-            setMessages((prev) => [...prev, {
-                id: Date.now().toString() + "-error", role: "assistant",
-                content: error.response?.data?.error || "Sorry, I couldn't process your question. Please try again.",
-                timestamp: new Date(),
-            }]);
+            if (error.response?.status === 403 && error.response?.data?.message?.includes("Trial expired")) {
+                Alert.alert(
+                    "Trial Expired",
+                    "Your free trial has ended. Upgrade to Pro to continue using all features.",
+                    [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Upgrade", onPress: () => router.push("/subscription") }
+                    ]
+                );
+                // Also optionally add a message to chat
+                setMessages((prev) => [...prev, {
+                    id: Date.now().toString() + "-error", role: "assistant",
+                    content: "Trial expired. Please upgrade to Pro to continue chatting.",
+                    timestamp: new Date(),
+                }]);
+            } else {
+                console.error("AI Mutation Error:", error);
+                console.error("Error Response:", error.response?.data);
+                setMessages((prev) => [...prev, {
+                    id: Date.now().toString() + "-error", role: "assistant",
+                    content: error.response?.data?.error || "Sorry, I couldn't process your question. Please try again.",
+                    timestamp: new Date(),
+                }]);
+            }
         },
     });
 

@@ -65,7 +65,10 @@ function TransactionCard({ item, onDelete, isDark }: { item: Transaction; onDele
     );
 }
 
+import { useRouter } from "expo-router";
+
 export default function Transactions() {
+    const router = useRouter();
     const queryClient = useQueryClient();
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
@@ -88,7 +91,20 @@ export default function Transactions() {
             queryClient.invalidateQueries({ queryKey: ["transactions"] });
             queryClient.invalidateQueries({ queryKey: ["summary"] });
         },
-        onError: () => { Alert.alert("Error", "Failed to delete transaction"); },
+        onError: (error: any) => {
+            if (error.response?.status === 403 && error.response?.data?.message?.includes("Trial expired")) {
+                Alert.alert(
+                    "Trial Expired",
+                    "Your free trial has ended. Upgrade to Pro to continue using all features.",
+                    [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Upgrade", onPress: () => router.push("/subscription") }
+                    ]
+                );
+            } else {
+                Alert.alert("Error", "Failed to delete transaction");
+            }
+        },
     });
 
     return (
