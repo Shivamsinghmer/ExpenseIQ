@@ -140,7 +140,8 @@ export const tagsAPI = {
 export const paymentsAPI = {
     createOrder: (amount: number) =>
         api.post<{ order_id: string; payment_session_id: string }>("/payments/create-order", { amount }),
-    checkStatus: () => api.get<{ isPro: boolean }>("/payments/status"),
+    checkStatus: () => api.get<{ isPro: boolean; proExpiresAt?: string }>("/payments/status"),
+    verifyOrder: (orderId: string) => api.post("/payments/verify", { orderId }),
 };
 
 // AI

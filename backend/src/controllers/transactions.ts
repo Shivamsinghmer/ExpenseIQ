@@ -266,19 +266,30 @@ export async function getSummary(req: AuthenticatedRequest, res: Response): Prom
             const start = new Date(startDate ? (startDate as string) : allTx[0].date);
             const end = new Date(endDate ? (endDate as string) : new Date());
 
-            const current = new Date(start);
-            current.setHours(0, 0, 0, 0);
-            const last = new Date(end);
-            last.setHours(0, 0, 0, 0);
+
 
             const txMap = new Map<string, { income: number; expense: number }>();
             allTx.forEach(t => {
+                // Use UTC date string to align with the loop
                 const d = t.date.toISOString().split("T")[0];
                 if (!txMap.has(d)) txMap.set(d, { income: 0, expense: 0 });
                 const entry = txMap.get(d)!;
                 if (t.type === "INCOME") entry.income += t.amount;
                 else entry.expense += t.amount;
             });
+
+            // Ensure start covers the first transaction too if earlier
+            if (allTx.length > 0 && allTx[0].date < start) {
+                start.setTime(allTx[0].date.getTime());
+            }
+
+            // Iterate using UTC to remain consistent
+            const current = new Date(start);
+            // Reset to midnight UTC to avoid partial day skips
+            current.setUTCHours(0, 0, 0, 0);
+
+            const last = new Date(end);
+            last.setUTCHours(23, 59, 59, 999); // Include the entire end day
 
             while (current <= last) {
                 const dateStr = current.toISOString().split("T")[0];
@@ -288,7 +299,8 @@ export async function getSummary(req: AuthenticatedRequest, res: Response): Prom
                     income: data.income,
                     expense: data.expense
                 });
-                current.setDate(current.getDate() + 1);
+                // Add 1 day safely
+                current.setUTCDate(current.getUTCDate() + 1);
             }
         }
 

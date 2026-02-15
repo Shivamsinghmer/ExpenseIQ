@@ -15,6 +15,7 @@ model User {
   id           String        @id @default(cuid())
   clerkUserId  String        @unique
   isPro        Boolean       @default(false)
+  proExpiresAt DateTime?
   createdAt    DateTime      @default(now())
   transactions Transaction[]
   tags         Tag[]
@@ -38,7 +39,7 @@ model Order {
 
 model ChatMessage {
   id        String   @id @default(cuid())
-  role      String   // "user" or "assistant"
+  role      String // "user" or "assistant"
   content   String
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -1,19 +1,21 @@
 {
   "name": "mobile",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.19.22",
     "@tanstack/react-query": "^5.90.20",
     "axios": "^1.13.5",
+    "cashfree-pg-api-contract": "^2.0.9",
     "expo": "~54.0.33",
     "expo-auth-session": "^7.0.10",
+    "expo-dev-client": "^6.0.20",
     "expo-file-system": "~19.0.21",
     "expo-linking": "~8.0.11",
     "expo-print": "~15.0.8",
@@ -21,6 +23,7 @@
     "expo-secure-store": "~15.0.8",
     "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.9",
+    "expo-system-ui": "^6.0.9",
     "expo-web-browser": "~15.0.10",
     "lucide-react-native": "^0.563.0",
     "nativewind": "^4.2.1",

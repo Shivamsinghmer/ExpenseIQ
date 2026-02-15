@@ -7,10 +7,14 @@ import aiRoutes from "./routes/ai";
 import paymentRoutes from "./routes/payments";
 
 console.log("--- Environment Verification ---");
+console.log("Server restarting to apply database schema changes...");
 console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`PORT: ${process.env.PORT}`);
 console.log(`GROQ_API_KEY: ${process.env.GROQ_API_KEY ? "LOADED (Starts with " + process.env.GROQ_API_KEY.substring(0, 4) + ")" : "MISSING"}`);
 console.log(`CLERK_SECRET_KEY: ${process.env.CLERK_SECRET_KEY ? "LOADED" : "MISSING"}`);
+console.log(`CASHFREE_APP_ID: ${process.env.CASHFREE_APP_ID ? "LOADED" : "MISSING"}`);
+console.log(`CASHFREE_SECRET_KEY: ${process.env.CASHFREE_SECRET_KEY ? "LOADED" : "MISSING"}`);
+console.log(`BACKEND_URL: ${process.env.BACKEND_URL || "MISSING"}`);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
