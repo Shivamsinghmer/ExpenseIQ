@@ -1,0 +1,16 @@
+# Native folders
+android/
+ios/
+
+# Dependencies
+node_modules/
+bun.lock
+
+# Expo build artifacts
+.expo/
+dist/
+web-build/
+
+# Other
+.DS_Store
+*.log
