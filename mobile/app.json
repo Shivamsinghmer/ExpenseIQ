@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "scheme": "expenseiq",
     "splash": {
       "image": "./assets/splash-icon.png",
