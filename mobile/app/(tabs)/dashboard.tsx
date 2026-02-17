@@ -193,6 +193,9 @@ export default function Dashboard() {
         },
     });
 
+    const showTrialBanner = !subscription?.isPro && subscription?.trialEndDate;
+
+
     // Prepare Chart Data
     const chartDates = summary?.chartData?.map((d) => {
         const date = new Date(d.date);
@@ -288,18 +291,25 @@ export default function Dashboard() {
             }
         >
             {/* Trial/Pro Status Banner */}
-            {!subscription?.isPro && subscription?.trialEndDate && (
-                <View className={`px-4 py-3 flex-row items-center justify-between ${new Date() > new Date(subscription.trialEndDate) ? "bg-red-500" : "bg-indigo-600"}`}>
+            {showTrialBanner && (
+                <View
+                    className={`px-4 pb-3 flex-row items-center justify-between ${new Date() > new Date(subscription!.trialEndDate!) ? "bg-red-500" : "bg-indigo-600"
+                        }`}
+                    style={{ paddingTop: insets.top + 12 }}
+                >
                     <View className="flex-row items-center flex-1">
-                        {new Date() > new Date(subscription.trialEndDate) ? (
+                        {new Date() > new Date(subscription!.trialEndDate!) ? (
                             <AlertCircle size={18} color="white" className="mr-2" />
                         ) : (
                             <Clock size={18} color="white" className="mr-2" />
                         )}
                         <Text className="text-white font-bold text-xs">
-                            {new Date() > new Date(subscription.trialEndDate)
+                            {new Date() > new Date(subscription!.trialEndDate!)
                                 ? "Free Trial Ended. Upgrade to Pro to unlock all features."
-                                : `Free Trial Active: ${Math.ceil((new Date(subscription.trialEndDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days remaining`}
+                                : `Free Trial Active: ${Math.ceil(
+                                    (new Date(subscription!.trialEndDate!).getTime() - new Date().getTime()) /
+                                    (1000 * 60 * 60 * 24)
+                                )} days remaining`}
                         </Text>
                     </View>
                     <TouchableOpacity
@@ -314,7 +324,7 @@ export default function Dashboard() {
             {/* Header Section */}
             <View
                 className="bg-transparent pb-6 px-6 rounded-b-[20px] mb-6"
-                style={{ paddingTop: insets.top + 20 }}
+                style={{ paddingTop: showTrialBanner ? 20 : insets.top + 20 }}
             >
                 <View className="flex-row items-center justify-between mb-8">
                     <ScrollView
