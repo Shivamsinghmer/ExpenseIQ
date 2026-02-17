@@ -3,16 +3,18 @@ import {
     View, Text, TextInput, TouchableOpacity, ActivityIndicator,
     Platform, Image
 } from "react-native";
-import { useSignUp, useOAuth } from "@clerk/clerk-expo";
+import { useSignUp, useOAuth, useAuth } from "@clerk/clerk-expo";
 import { useRouter, Link } from "expo-router";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useWarmUpBrowser } from "../../hooks/useWarmUpBrowser";
 import * as AuthSession from "expo-auth-session";
+import { paymentsAPI, setAuthToken } from "../../services/api";
 
 export default function SignUp() {
     useWarmUpBrowser();
 
     const { signUp, setActive, isLoaded } = useSignUp();
+    const { getToken } = useAuth();
     const router = useRouter();
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
@@ -47,7 +49,38 @@ export default function SignUp() {
             const result = await signUp.attemptEmailAddressVerification({ code });
             if (result.status === "complete") {
                 if (setActive) await setActive({ session: result.createdSessionId });
-                router.replace("/trial-started");
+
+                // Smart redirect: Check if user is truly new
+                try {
+                    // Clerk's setActive can take a moment to propagate to useAuth hooks
+                    // Let's try to get the token directly or wait slightly
+                    let token = await getToken();
+                    if (!token) {
+                        // Small retry for token availability
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        token = await getToken();
+                    }
+
+                    if (token) {
+                        setAuthToken(token);
+                        const res = await paymentsAPI.checkStatus();
+                        const trialStart = res.data.trialStartDate ? new Date(res.data.trialStartDate).getTime() : 0;
+                        const now = new Date().getTime();
+
+                        // If user was created within the last 2 minutes, show trial screen
+                        if (now - trialStart < 120000 && !res.data.isPro) {
+                            router.replace("/trial-started");
+                        } else {
+                            router.replace("/(tabs)/dashboard");
+                        }
+                    } else {
+                        console.warn("Could not get auth token for redirection check");
+                        router.replace("/(tabs)/dashboard");
+                    }
+                } catch (e) {
+                    console.error("Redirection check failed, defaulting to dashboard", e);
+                    router.replace("/(tabs)/dashboard");
+                }
             } else {
                 console.error("Sign up incomplete:", result);
             }
@@ -70,7 +103,23 @@ export default function SignUp() {
             const { createdSessionId, setActive } = await startOAuthFlow({ redirectUrl });
             if (createdSessionId && setActive) {
                 await setActive({ session: createdSessionId });
-                router.replace("/trial-started");
+
+                // Smart redirect: Check if user is truly new
+                try {
+                    const res = await paymentsAPI.checkStatus();
+                    const trialStart = res.data.trialStartDate ? new Date(res.data.trialStartDate).getTime() : 0;
+                    const now = new Date().getTime();
+
+                    // If user was created within the last 2 minutes, show trial screen
+                    if (now - trialStart < 120000 && !res.data.isPro) {
+                        router.replace("/trial-started");
+                    } else {
+                        router.replace("/(tabs)/dashboard");
+                    }
+                } catch (e) {
+                    console.error("Redirection check failed, defaulting to dashboard", e);
+                    router.replace("/(tabs)/dashboard");
+                }
             }
         } catch (err) {
             console.error("OAuth error", err);
