@@ -1,6 +1,6 @@
 // Environment-based API configuration
 const EMULATOR_API_URL = "http://10.0.2.2:3001"; // Android Emulator
-const PHYSICAL_DEVICE_API_URL = "http://10.192.28.39:3001"; // YOUR LOCAL IP for Physical Device
+const PHYSICAL_DEVICE_API_URL = "http://10.51.197.39:3001"; // YOUR LOCAL IP for Physical Device
 const PROD_API_URL = "https://expense-iq-one.vercel.app"; // Production URL
 
 // Toggle automatically based on development mode
