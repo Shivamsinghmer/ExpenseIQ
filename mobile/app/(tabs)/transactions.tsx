@@ -5,17 +5,21 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
-import { transactionsAPI, type Transaction, type TransactionListResponse } from "../../services/api";
+import { transactionsAPI, paymentsAPI, type Transaction, type TransactionListResponse } from "../../services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CreditCard, Search, TrendingUp, TrendingDown, X } from "lucide-react-native";
 
-function TransactionCard({ item, onDelete, isDark }: { item: Transaction; onDelete: (id: string) => void; isDark: boolean }) {
+function TransactionCard({ item, onDelete, isDark, isExpired }: { item: Transaction; onDelete: (id: string) => void; isDark: boolean; isExpired: boolean }) {
     const isIncome = item.type === "INCOME";
     return (
         <TouchableOpacity
             className="bg-white dark:bg-surface-dark border border-border dark:border-border-dark rounded-2xl p-4 mb-3 shadow-sm"
             activeOpacity={0.7}
             onLongPress={() => {
+                if (isExpired) {
+                    Alert.alert("Trial Expired", "Upgrade to Pro to delete transactions.");
+                    return;
+                }
                 Alert.alert("Delete Transaction", `Are you sure you want to delete "${item.title}"?`, [
                     { text: "Cancel", style: "cancel" },
                     { text: "Delete", style: "destructive", onPress: () => onDelete(item.id) },
@@ -79,6 +83,14 @@ export default function Transactions() {
     const queryParams: Record<string, string> = { page: page.toString(), limit: "20" };
     if (filter !== "ALL") queryParams.type = filter;
     if (search.trim()) queryParams.search = search.trim();
+
+    const { data: subscription } = useQuery({
+        queryKey: ["subscriptionStatus"],
+        queryFn: async () => {
+            const res = await paymentsAPI.checkStatus();
+            return res.data;
+        },
+    });
 
     const { data, isLoading, refetch, isRefetching } = useQuery<TransactionListResponse>({
         queryKey: ["transactions", filter, search, page],
@@ -164,7 +176,14 @@ export default function Transactions() {
             ) : (
                 <FlatList
                     data={data?.transactions || []}
-                    renderItem={({ item }) => <TransactionCard item={item} onDelete={(id) => deleteMutation.mutate(id)} isDark={isDark} />}
+                    renderItem={({ item }) => (
+                        <TransactionCard
+                            item={item}
+                            onDelete={(id) => deleteMutation.mutate(id)}
+                            isDark={isDark}
+                            isExpired={!!(!subscription?.isPro && subscription?.trialEndDate && new Date() > new Date(subscription.trialEndDate))}
+                        />
+                    )}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }}
                     showsVerticalScrollIndicator={false}

@@ -16,6 +16,7 @@ import {
     tagsAPI,
     type Tag,
     type CreateTransactionData,
+    paymentsAPI,
 } from "../../services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TrendingDown, TrendingUp, CalendarDays, FileText, StickyNote, Check, ChevronRight } from "lucide-react-native";
@@ -41,6 +42,16 @@ export default function AddTransaction() {
             return res.data;
         },
     });
+
+    const { data: subscription } = useQuery({
+        queryKey: ["subscriptionStatus"],
+        queryFn: async () => {
+            const res = await paymentsAPI.checkStatus();
+            return res.data;
+        },
+    });
+
+    const isExpired = !subscription?.isPro && subscription?.trialEndDate && new Date() > new Date(subscription.trialEndDate);
 
     const createMutation = useMutation({
         mutationFn: (data: CreateTransactionData) => transactionsAPI.create(data),
@@ -269,17 +280,27 @@ export default function AddTransaction() {
 
                         {/* Summary View (Pre-Submit) */}
                         <View className="mt-0 pt-6 border-t border-slate-100 dark:border-slate-700">
+                            {isExpired && (
+                                <View className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl mb-4 flex-row items-center border border-red-100 dark:border-red-900/30">
+                                    <View className="bg-red-500 w-2 h-2 rounded-full mr-3" />
+                                    <Text className="text-red-600 dark:text-red-400 text-xs font-bold flex-1">
+                                        Free Trial Ended. Please upgrade to Pro to add new transactions.
+                                    </Text>
+                                </View>
+                            )}
                             <TouchableOpacity
                                 onPress={handleSubmit}
-                                disabled={createMutation.isPending}
-                                className={`w-full py-4 rounded-2xl flex-row items-center justify-center shadow-lg ${createMutation.isPending ? "bg-slate-200" : "bg-black shadow-black/20"}`}
+                                disabled={createMutation.isPending || !!isExpired}
+                                className={`w-full py-4 rounded-2xl flex-row items-center justify-center shadow-lg ${createMutation.isPending || !!isExpired ? "bg-slate-200 dark:bg-slate-800" : "bg-black shadow-black/20"}`}
                                 activeOpacity={0.9}
                             >
                                 {createMutation.isPending ? (
                                     <ActivityIndicator color="#fff" />
                                 ) : (
                                     <>
-                                        <Text className="text-white font-semibold text-md tracking-widest">Save Transaction</Text>
+                                        <Text className={`${createMutation.isPending || isExpired ? "text-slate-400" : "text-white"} font-semibold text-md tracking-widest`}>
+                                            {isExpired ? "Upgrade to Save" : "Save Transaction"}
+                                        </Text>
                                     </>
                                 )}
                             </TouchableOpacity>
