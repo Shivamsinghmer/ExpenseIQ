@@ -3,17 +3,19 @@ import {
     View, Text, TextInput, TouchableOpacity, ActivityIndicator,
     Platform, Image, Alert
 } from "react-native";
-import { useSignIn, useOAuth } from "@clerk/clerk-expo";
+import { useSignIn, useOAuth, useAuth } from "@clerk/clerk-expo";
 import { useRouter, Link } from "expo-router";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useWarmUpBrowser } from "../../hooks/useWarmUpBrowser";
 import { API_BASE_URL } from "../../lib/config";
+import { paymentsAPI, setAuthToken } from "../../services/api";
 import * as AuthSession from "expo-auth-session";
 
 export default function SignIn() {
     useWarmUpBrowser();
 
     const { signIn, setActive, isLoaded } = useSignIn();
+    const { getToken } = useAuth();
     const router = useRouter();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -35,7 +37,33 @@ export default function SignIn() {
             const { createdSessionId, setActive: setOAuthActive } = await startOAuthFlow({ redirectUrl });
             if (createdSessionId && setOAuthActive) {
                 await setOAuthActive({ session: createdSessionId });
-                router.replace("/(tabs)/dashboard");
+
+                // Smart redirect: Check if user is truly new (in case they used sign-in but are new)
+                try {
+                    let token = await getToken();
+                    if (!token) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        token = await getToken();
+                    }
+
+                    if (token) {
+                        setAuthToken(token);
+                        const res = await paymentsAPI.checkStatus();
+                        const trialStart = res.data.trialStartDate ? new Date(res.data.trialStartDate).getTime() : 0;
+                        const now = new Date().getTime();
+
+                        // Even in sign-in, if they just registered via Google OAuth, show trial screen
+                        if (now - trialStart < 120000 && !res.data.isPro) {
+                            router.replace("/trial-started");
+                        } else {
+                            router.replace("/(tabs)/dashboard");
+                        }
+                    } else {
+                        router.replace("/(tabs)/dashboard");
+                    }
+                } catch (e) {
+                    router.replace("/(tabs)/dashboard");
+                }
             } else {
                 // Use generic error if session creation fails without specific error
                 Alert.alert("Error", "Google Sign-In failed or was cancelled.");
@@ -67,7 +95,30 @@ export default function SignIn() {
 
                 if (result.status === "complete") {
                     if (setActive) await setActive({ session: result.createdSessionId });
-                    router.replace("/(tabs)/dashboard");
+
+                    // Smart redirect
+                    try {
+                        let token = await getToken();
+                        if (!token) {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            token = await getToken();
+                        }
+                        if (token) {
+                            setAuthToken(token);
+                            const res = await paymentsAPI.checkStatus();
+                            const trialStart = res.data.trialStartDate ? new Date(res.data.trialStartDate).getTime() : 0;
+                            const now = new Date().getTime();
+                            if (now - trialStart < 120000 && !res.data.isPro) {
+                                router.replace("/trial-started");
+                            } else {
+                                router.replace("/(tabs)/dashboard");
+                            }
+                        } else {
+                            router.replace("/(tabs)/dashboard");
+                        }
+                    } catch (e) {
+                        router.replace("/(tabs)/dashboard");
+                    }
                 } else {
                     console.log("2FA Incomplete:", result);
                     setError("Verification failed. Please check the code.");
@@ -80,7 +131,30 @@ export default function SignIn() {
 
                 if (result.status === "complete") {
                     if (setActive) await setActive({ session: result.createdSessionId });
-                    router.replace("/(tabs)/dashboard");
+
+                    // Smart redirect
+                    try {
+                        let token = await getToken();
+                        if (!token) {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            token = await getToken();
+                        }
+                        if (token) {
+                            setAuthToken(token);
+                            const res = await paymentsAPI.checkStatus();
+                            const trialStart = res.data.trialStartDate ? new Date(res.data.trialStartDate).getTime() : 0;
+                            const now = new Date().getTime();
+                            if (now - trialStart < 120000 && !res.data.isPro) {
+                                router.replace("/trial-started");
+                            } else {
+                                router.replace("/(tabs)/dashboard");
+                            }
+                        } else {
+                            router.replace("/(tabs)/dashboard");
+                        }
+                    } catch (e) {
+                        router.replace("/(tabs)/dashboard");
+                    }
                 } else if (result.status === "needs_second_factor") {
                     console.log("2FA required. Available factors:", result.supportedSecondFactors);
 

@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
-import { aiAPI, type AIResponse } from "../../services/api";
+import { aiAPI, paymentsAPI, type AIResponse } from "../../services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Eraser, Bot, ArrowUp } from "lucide-react-native";
 
@@ -63,6 +63,17 @@ export default function AIChatbot() {
         timestamp: new Date(),
     };
 
+    // Load subscription status
+    const { data: subscription } = useQuery({
+        queryKey: ["subscriptionStatus"],
+        queryFn: async () => {
+            const res = await paymentsAPI.checkStatus();
+            return res.data;
+        },
+    });
+
+    const isExpired = !!(!subscription?.isPro && subscription?.trialEndDate && new Date() > new Date(subscription.trialEndDate));
+
     // Load chat history
     const { isLoading: isLoadingHistory } = useQuery({
         queryKey: ["chatHistory"],
@@ -118,7 +129,7 @@ export default function AIChatbot() {
 
     const handleSend = (text?: string) => {
         const question = (text || input).trim();
-        if (!question || askMutation.isPending) return;
+        if (!question || askMutation.isPending || isExpired) return;
         console.log("Sending question to AI:", question);
         setMessages((prev) => [...prev, { id: Date.now().toString(), role: "user", content: question, timestamp: new Date() }]);
         setInput("");
@@ -248,21 +259,22 @@ export default function AIChatbot() {
             )}
 
             {/* Input */}
-            <View className="px-5 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 pb-28">
+            <View className={`px-5 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 pb-28 ${isExpired ? "opacity-50" : ""}`}>
                 <View className="flex-row items-end bg-slate-100 dark:bg-slate-800 rounded-2xl p-1.5 border border-slate-200 dark:border-slate-700">
                     <TextInput
                         className="flex-1 px-4 py-3 text-slate-800 dark:text-white text-base max-h-[120px]"
-                        placeholder="Ask anything..."
+                        placeholder={isExpired ? "Trial expired. Upgrade to chat." : "Ask anything..."}
                         placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
                         value={input}
                         onChangeText={setInput}
                         multiline
                         blurOnSubmit={false}
+                        editable={!isExpired}
                     />
                     <TouchableOpacity
                         onPress={() => handleSend()}
-                        disabled={!input.trim() || askMutation.isPending}
-                        className={`w-10 h-10 rounded-full items-center justify-center mb-1 mr-1 ${input.trim() && !askMutation.isPending ? "bg-black" : "bg-slate-300 dark:bg-slate-700"}`}
+                        disabled={!input.trim() || askMutation.isPending || isExpired}
+                        className={`w-10 h-10 rounded-full items-center justify-center mb-1 mr-1 ${input.trim() && !askMutation.isPending && !isExpired ? "bg-black" : "bg-slate-300 dark:bg-slate-700"}`}
                         activeOpacity={0.8}
                     >
                         <ArrowUp size={22} color="white" />

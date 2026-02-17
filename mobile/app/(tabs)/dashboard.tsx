@@ -19,7 +19,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, paymentsAPI, type SummaryResponse, type Transaction } from "../../services/api";
-import { ArrowDown, ArrowUp, File, TrendingUp, TrendingDown, Crown } from "lucide-react-native";
+import { ArrowDown, ArrowUp, File, TrendingUp, TrendingDown, Crown, AlertCircle, Clock } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 
@@ -287,6 +287,30 @@ export default function Dashboard() {
                 <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor={isDark ? "#818cf8" : "#6366f1"} />
             }
         >
+            {/* Trial/Pro Status Banner */}
+            {!subscription?.isPro && subscription?.trialEndDate && (
+                <View className={`px-4 py-3 flex-row items-center justify-between ${new Date() > new Date(subscription.trialEndDate) ? "bg-red-500" : "bg-indigo-600"}`}>
+                    <View className="flex-row items-center flex-1">
+                        {new Date() > new Date(subscription.trialEndDate) ? (
+                            <AlertCircle size={18} color="white" className="mr-2" />
+                        ) : (
+                            <Clock size={18} color="white" className="mr-2" />
+                        )}
+                        <Text className="text-white font-bold text-xs">
+                            {new Date() > new Date(subscription.trialEndDate)
+                                ? "Free Trial Ended. Upgrade to Pro to unlock all features."
+                                : `Free Trial Active: ${Math.ceil((new Date(subscription.trialEndDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days remaining`}
+                        </Text>
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => router.push("/subscription")}
+                        className="bg-white/20 px-3 py-1.5 rounded-full"
+                    >
+                        <Text className="text-white font-black text-[10px] uppercase">Upgrade</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* Header Section */}
             <View
                 className="bg-transparent pb-6 px-6 rounded-b-[20px] mb-6"
