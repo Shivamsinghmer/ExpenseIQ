@@ -139,7 +139,7 @@ export const tagsAPI = {
 // Payments
 export const paymentsAPI = {
     createOrder: (amount: number) =>
-        api.post<{ order_id: string; payment_session_id: string }>("/payments/create-order", { amount }),
+        api.post<{ order_id: string; payment_session_id: string; environment: string }>("/payments/create-order", { amount }),
     checkStatus: () => api.get<{
         isPro: boolean;
         proExpiresAt?: string;

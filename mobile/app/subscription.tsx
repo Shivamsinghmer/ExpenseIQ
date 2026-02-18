@@ -142,9 +142,11 @@ export default function SubscriptionScreen() {
             setLoading(true);
             const amount = selectedPlan === 'monthly' ? 50 : 500;
             const response = await paymentsAPI.createOrder(amount);
-            const { payment_session_id, order_id } = response.data;
+            const { payment_session_id, order_id, environment } = response.data;
 
-            const session = new CFSession(payment_session_id, order_id, CFEnvironment.SANDBOX);
+            const cfEnv = environment === "PRODUCTION" ? CFEnvironment.PRODUCTION : CFEnvironment.SANDBOX;
+
+            const session = new CFSession(payment_session_id, order_id, cfEnv);
 
             const paymentComponent = new CFPaymentComponentBuilder()
                 .add(CFPaymentModes.CARD)

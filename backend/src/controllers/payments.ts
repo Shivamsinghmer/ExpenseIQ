@@ -5,8 +5,9 @@ import { AuthenticatedRequest } from "../middleware/auth";
 import { getOrCreateUser } from "../services/userService";
 
 // Initialize Cashfree
+const cashfreeEnv = process.env.CASHFREE_ENV === "PRODUCTION" ? CFEnvironment.PRODUCTION : CFEnvironment.SANDBOX;
 const cashfree = new Cashfree(
-    CFEnvironment.SANDBOX,
+    cashfreeEnv,
     process.env.CASHFREE_APP_ID!,
     process.env.CASHFREE_SECRET_KEY!,
     "2023-08-01"
@@ -21,8 +22,12 @@ export async function verifyPayment(req: AuthenticatedRequest, res: Response): P
             return;
         }
 
+        const baseUrl = process.env.CASHFREE_ENV === "PRODUCTION"
+            ? "https://api.cashfree.com/pg"
+            : "https://sandbox.cashfree.com/pg";
+
         // Direct fetch for robust verification
-        const response = await fetch(`https://sandbox.cashfree.com/pg/orders/${orderId}/payments`, {
+        const response = await fetch(`${baseUrl}/orders/${orderId}/payments`, {
             method: "GET",
             headers: {
                 "x-api-version": "2023-08-01",
@@ -153,7 +158,11 @@ export async function createOrder(req: AuthenticatedRequest, res: Response): Pro
             // Fallback to direct API call if SDK fails (or just replace it)
             // Using fetch which is available in Node 18+
             try {
-                const response = await fetch("https://sandbox.cashfree.com/pg/orders", {
+                const baseUrl = process.env.CASHFREE_ENV === "PRODUCTION"
+                    ? "https://api.cashfree.com/pg"
+                    : "https://sandbox.cashfree.com/pg";
+
+                const response = await fetch(`${baseUrl}/orders`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -185,6 +194,7 @@ export async function createOrder(req: AuthenticatedRequest, res: Response): Pro
                 res.json({
                     order_id: data.order_id,
                     payment_session_id: data.payment_session_id,
+                    environment: process.env.CASHFREE_ENV === "PRODUCTION" ? "PRODUCTION" : "SANDBOX"
                 });
                 return;
             } catch (fetchError: any) {
