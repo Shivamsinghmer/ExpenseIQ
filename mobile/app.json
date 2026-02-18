@@ -26,7 +26,8 @@
         "backgroundColor": "#0F0F23"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.expenseiq.app"
+      "package": "com.expenseiq.app",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png",
