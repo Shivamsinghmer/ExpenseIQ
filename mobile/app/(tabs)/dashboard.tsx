@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { LineChart } from "../../components/LineChart";
 import Svg, { Path } from "react-native-svg";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import * as Print from "expo-print";
@@ -152,6 +152,16 @@ export default function Dashboard() {
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const [pdfLoading, setPdfLoading] = useState(false);
+    const queryClient = useQueryClient();
+
+    const handleSignOut = async () => {
+        try {
+            await signOut();
+            queryClient.clear();
+        } catch (error) {
+            console.error("Sign out error:", error);
+        }
+    };
 
     const [range, setRange] = useState<"1W" | "1M" | "3M" | "1Y" | "All">("1M");
 
@@ -306,10 +316,15 @@ export default function Dashboard() {
                         <Text className="text-white font-bold text-xs">
                             {new Date() > new Date(subscription!.trialEndDate!)
                                 ? "Free Trial Ended. Upgrade to Pro to unlock all features."
-                                : `Free Trial Active: ${Math.ceil(
-                                    (new Date(subscription!.trialEndDate!).getTime() - new Date().getTime()) /
-                                    (1000 * 60 * 60 * 24)
-                                )} days remaining`}
+                                : (() => {
+                                    const diff = new Date(subscription!.trialEndDate!).getTime() - new Date().getTime();
+                                    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                                    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+                                    if (days > 0) return `Free Trial Active: ${days}d ${hours}h remaining`;
+                                    return `Free Trial Active: ${hours}h ${minutes}m remaining`;
+                                })()}
                         </Text>
                     </View>
                     <TouchableOpacity
@@ -353,7 +368,7 @@ export default function Dashboard() {
                             onPress={() => {
                                 Alert.alert("Sign Out", "Are you sure you want to sign out?", [
                                     { text: "Cancel", style: "cancel" },
-                                    { text: "Sign Out", style: "destructive", onPress: () => signOut() },
+                                    { text: "Sign Out", style: "destructive", onPress: handleSignOut },
                                 ]);
                             }}
                             className="bg-black/10 dark:bg-white/20 p-[10px] rounded-full items-center justify-center"
