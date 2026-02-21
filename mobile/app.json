@@ -39,7 +39,10 @@
       "expo-system-ui"
     ],
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "80133754-86c3-4b82-bec4-c238896a1670"
+      }
     },
     "owner": "sandeepannandi"
   }
