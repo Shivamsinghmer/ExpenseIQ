@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ExpenseIQ",
-    "slug": "expense-iq",
+    "slug": "expenseiq",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
@@ -41,9 +41,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "74364ead-60a0-4e55-9ebd-cc8f6adc6b9d"
+        "projectId": "80133754-86c3-4b82-bec4-c238896a1670"
       }
     },
-    "owner": "shivammer"
+    "owner": "sandeepannandi"
   }
 }
