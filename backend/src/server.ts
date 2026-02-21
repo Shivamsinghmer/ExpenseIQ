@@ -6,6 +6,7 @@ import transactionRoutes from "./routes/transactions";
 import tagRoutes from "./routes/tags";
 import aiRoutes from "./routes/ai";
 import paymentRoutes from "./routes/payments";
+import userRoutes from "./routes/users";
 
 console.log("--- Environment Verification ---");
 console.log("Server restarting...");
@@ -42,6 +43,7 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/tags", tagRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/users", userRoutes);
 
 // 404 handler
 app.use((_req, res) => {
