@@ -1,21 +1,19 @@
 {
   "expo": {
-    "name": "ExpenseIQ",
-    "slug": "expenseiq",
+    "name": "ExpensePal",
+    "slug": "expensepal",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "scheme": "expenseiq",
+    "scheme": "expensepal",
     "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0F0F23"
+      "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.expenseiq.app",
+      "bundleIdentifier": "com.expensepal.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -26,7 +24,7 @@
         "backgroundColor": "#0F0F23"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.expenseiq.app",
+      "package": "com.expensepal.app",
       "versionCode": 2
     },
     "web": {
