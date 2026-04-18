@@ -497,7 +497,7 @@ export default function Dashboard() {
             {/* ─── Smart Insights ─── */}
             <View className="px-5 mb-6">
                 <View className="flex-row items-center mb-4">
-                    <Text className="text-gray-900 text-xl font-geist-b ml-2">Smart Insights</Text>
+                    <Text className="text-gray-900 text-xl font-geist-b">Smart Insights</Text>
                 </View>
                 {(() => {
                     const insights: { emoji: string; text: string }[] = [];
