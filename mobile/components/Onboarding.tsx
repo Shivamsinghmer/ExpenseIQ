@@ -52,7 +52,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
     return (
         <SafeAreaView className="flex-1 bg-white dark:bg-black">
             <FlatList
-                ref={flatListRef}
+                ref={flatListRef as any}
                 data={SLIDES}
                 horizontal
                 pagingEnabled

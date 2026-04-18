@@ -30,14 +30,14 @@ export default function Index() {
         if (isSignedIn) {
             router.replace("/(tabs)/dashboard");
         } else if (!showOnboarding) {
-            router.replace("/(auth)/welcome");
+            router.replace("/(auth)/sign-up");
         }
     }, [isSignedIn, isLoaded, showOnboarding]);
 
     if (!isLoaded || showOnboarding === null) {
         return (
             <View className="flex-1 items-center justify-center bg-white dark:bg-black">
-                <ActivityIndicator size="large" color="#20CBA3" />
+                <ActivityIndicator size="large" color="#FF6A00" />
             </View>
         );
     }
@@ -47,7 +47,7 @@ export default function Index() {
             <Onboarding
                 onComplete={async () => {
                     await SecureStore.setItemAsync("hasSeenOnboarding", "true");
-                    router.replace("/(auth)/welcome");
+                    router.replace("/(auth)/sign-up");
                 }}
             />
         );

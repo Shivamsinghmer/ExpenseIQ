@@ -10,6 +10,7 @@ import { useWarmUpBrowser } from "../../hooks/useWarmUpBrowser";
 import { API_BASE_URL } from "../../lib/config";
 import { paymentsAPI, setAuthToken } from "../../services/api";
 import * as AuthSession from "expo-auth-session";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SignIn() {
     useWarmUpBrowser();
@@ -186,127 +187,99 @@ export default function SignIn() {
 
     return (
         <View className="flex-1 bg-white">
-            <KeyboardAwareScrollView
-                contentContainerStyle={{ flexGrow: 1 }}
-                keyboardShouldPersistTaps="handled"
-                enableOnAndroid={true}
-                extraScrollHeight={Platform.OS === "ios" ? 20 : 50}
-            >
-                <View className="flex-1 justify-center px-6 py-12">
+            <SafeAreaView className="flex-1">
+                <KeyboardAwareScrollView
+                    contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingVertical: 20 }}
+                    keyboardShouldPersistTaps="handled"
+                    enableOnAndroid={true}
+                    extraScrollHeight={Platform.OS === "ios" ? 20 : 50}
+                >
                     {/* Header */}
-                    <View className="items-center mb-10">
-
-                        <Text className="text-4xl font-black text-gray-900 tracking-tight">ExpenseIQ</Text>
-                        <Text className="text-gray-500 text-base font-medium mt-2">Smart financial tracking</Text>
-                    </View>
-
-                    {/* Card Container */}
-                    <View className="bg-white border border-gray-200 p-8 rounded-[32px] shadow-sm">
-                        <Text className="text-2xl font-bold text-gray-900 mb-2">
-                            Welcome Back
-                        </Text>
-                        <Text className="text-gray-500 text-sm mb-8 leading-5">
-                            Please sign in to continue to your dashboard.
-                        </Text>
-
-                        <View className="space-y-5">
-                            {show2FA ? (
-                                <View>
-                                    <Text className="text-gray-700 font-bold text-sm mb-2 ml-1">Verification Code</Text>
-                                    <TextInput
-                                        className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 text-gray-900 text-center text-2xl font-bold tracking-[8px] focus:border-black focus:bg-white"
-                                        placeholder="000000"
-                                        placeholderTextColor="#9ca3af"
-                                        value={code}
-                                        onChangeText={setCode}
-                                        keyboardType="number-pad"
-                                        maxLength={6}
-                                    />
-                                </View>
-                            ) : (
-                                <>
-                                    <View>
-                                        <Text className="text-gray-700 font-bold text-sm mb-2 ml-1">Email Address</Text>
-                                        <TextInput
-                                            className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 text-gray-900 text-base font-medium focus:border-black focus:bg-white"
-                                            placeholder="name@example.com"
-                                            placeholderTextColor="#9ca3af"
-                                            value={email}
-                                            onChangeText={setEmail}
-                                            keyboardType="email-address"
-                                            autoCapitalize="none"
-                                            autoCorrect={false}
-                                        />
-                                    </View>
-                                    <View>
-                                        <Text className="text-gray-700 font-bold text-sm mb-2 ml-1">Password</Text>
-                                        <TextInput
-                                            className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 text-gray-900 text-base font-medium focus:border-black focus:bg-white"
-                                            placeholder="Enter your password"
-                                            placeholderTextColor="#9ca3af"
-                                            value={password}
-                                            onChangeText={setPassword}
-                                            secureTextEntry
-                                        />
-                                    </View>
-                                </>
-                            )}
-
-                            {error ? (
-                                <View className="bg-red-50 border border-red-200 rounded-2xl p-4 flex-row items-center justify-center">
-                                    <Text className="text-red-500 font-bold text-sm text-center">{error}</Text>
-                                </View>
-                            ) : null}
-
-                            <TouchableOpacity
-                                onPress={handleSignIn}
-                                disabled={loading || (show2FA ? code.length !== 6 : (!email || !password))}
-                                className={`mt-2 py-4 items-center rounded-2xl shadow-sm ${(show2FA ? code.length !== 6 : (!email || !password)) ? "bg-gray-200 shadow-none" : "bg-gray-900"}`}
-                                activeOpacity={0.9}
-                            >
-                                {loading ? (
-                                    <ActivityIndicator color="#fff" />
-                                ) : (
-                                    <Text className={`${(show2FA ? code.length !== 6 : (!email || !password)) ? "text-gray-400" : "text-white"} font-bold text-lg`}>
-                                        {show2FA ? "Verify Code" : "Sign In"}
-                                    </Text>
-                                )}
-                            </TouchableOpacity>
-
-                            {/* Divider & Google Sign In */}
-                            <View className="flex-row items-center mt-4 mb-4">
-                                <View className="flex-1 h-[1px] bg-gray-200" />
-                                <Text className="mx-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Or</Text>
-                                <View className="flex-1 h-[1px] bg-gray-200" />
-                            </View>
-
-                            <TouchableOpacity
-                                onPress={handleGoogleSignIn}
-                                className="py-4 items-center bg-white border border-gray-200 rounded-2xl"
-                                activeOpacity={0.8}
-                            >
-                                <View className="flex-row items-center gap-3">
-                                    <Image
-                                        source={require("../../assets/google-icon.png")}
-                                        style={{ width: 24, height: 24 }}
-                                        resizeMode="contain"
-                                    />
-                                    <Text className="text-gray-700 font-bold text-base">Continue with Google</Text>
-                                </View>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    <View className="flex-row justify-center mt-10">
-                        <Text className="text-gray-500 text-sm font-medium">New to ExpenseIQ? </Text>
+                    <View className="flex-row justify-end items-center mb-10">
                         <Link href="/(auth)/sign-up" asChild>
                             <TouchableOpacity>
-                                <Text className="text-gray-900 text-sm font-black underline decoration-2 underline-offset-4">Create Account</Text>
+                                <Text className="text-[#FF6A00] font-geist-sb text-base">Sign up</Text>
                             </TouchableOpacity>
                         </Link>
                     </View>
-                </View>
-            </KeyboardAwareScrollView>
+
+                    {/* Logo Area */}
+                    <Text className="text-[#FF6A00] font-black text-3xl mb-12 tracking-tighter">ExpensePal.</Text>
+
+                    <Text className="text-4xl font-geist-b text-gray-900 mb-2">Welcome back</Text>
+                    <Text className="text-gray-600 font-geist-md mb-8 text-base">Sign in to securely access your account</Text>
+
+                    {show2FA ? (
+                        <View className="border border-gray-300 rounded-xl px-4 py-2 bg-white mb-6">
+                            <Text className="text-[12px] font-geist-md text-gray-500 mb-1">Verification Code</Text>
+                            <TextInput
+                                className="text-gray-900 text-2xl font-geist-b tracking-[8px] p-0 h-10 mt-1"
+                                placeholder="000000"
+                                placeholderTextColor="#9ca3af"
+                                value={code}
+                                onChangeText={setCode}
+                                keyboardType="number-pad"
+                                maxLength={6}
+                                autoFocus
+                            />
+                        </View>
+                    ) : (
+                        <View>
+                            <View className="border border-gray-300 rounded-xl px-4 py-2 bg-white mb-4">
+                                <Text className="text-[12px] font-geist-md text-gray-500 mb-1">Email</Text>
+                                <TextInput
+                                    className="text-gray-900 text-lg font-geist-md p-0 h-7"
+                                    placeholder="alex.smith@example.com"
+                                    placeholderTextColor="#9ca3af"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                />
+                            </View>
+
+                            <View className="border border-gray-300 rounded-xl px-4 py-2 bg-white mb-6">
+                                <Text className="text-[12px] font-geist-md text-gray-500 mb-1">Password</Text>
+                                <TextInput
+                                    className="text-gray-900 text-lg font-geist-md p-0 h-7"
+                                    placeholder="Enter your password"
+                                    placeholderTextColor="#9ca3af"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry
+                                />
+                            </View>
+                        </View>
+                    )}
+
+                    {error ? (
+                        <Text className="text-red-500 font-geist-sb text-sm mb-4 text-center">{error}</Text>
+                    ) : null}
+
+                    <TouchableOpacity
+                        onPress={handleSignIn}
+                        disabled={loading || (show2FA ? code.length !== 6 : (!email || !password))}
+                        className={`w-full h-14 rounded-full justify-center items-center mb-6 shadow-sm ${(show2FA ? code.length !== 6 : (!email || !password)) ? "bg-[#e5e7eb] shadow-none" : "bg-[#FF6A00] active:bg-[#E65C00]"}`}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text className={`font-geist-sb tracking-wide text-lg ${(show2FA ? code.length !== 6 : (!email || !password)) ? "text-gray-400" : "text-white"}`}>
+                                {show2FA ? "Verify Code" : "Log In"}
+                            </Text>
+                        )}
+                    </TouchableOpacity>
+
+                    {!show2FA && (
+                        <TouchableOpacity onPress={handleGoogleSignIn} className="items-center justify-center mt-2">
+                            <Text className="text-gray-600 font-geist-sb underline">Or continue with Google</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    <View className="flex-1" />
+                </KeyboardAwareScrollView>
+            </SafeAreaView>
         </View>
     );
 }
