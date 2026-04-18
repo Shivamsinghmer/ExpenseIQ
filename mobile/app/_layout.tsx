@@ -15,6 +15,9 @@ function StatusBarWrapper() {
     return <StatusBar style={isDark ? "light" : "dark"} />;
 }
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+
 export default function RootLayout() {
     const [fontsLoaded] = useFonts({
         "Geist-Regular": Geist_400Regular,
@@ -34,13 +37,17 @@ export default function RootLayout() {
     }
 
     return (
-        <AuthProvider>
-            <QueryProvider>
-                <ThemeProvider>
-                    <StatusBarWrapper />
-                    <Stack screenOptions={{ headerShown: false }} />
-                </ThemeProvider>
-            </QueryProvider>
-        </AuthProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <BottomSheetModalProvider>
+                <AuthProvider>
+                    <QueryProvider>
+                        <ThemeProvider>
+                            <StatusBarWrapper />
+                            <Stack screenOptions={{ headerShown: false }} />
+                        </ThemeProvider>
+                    </QueryProvider>
+                </AuthProvider>
+            </BottomSheetModalProvider>
+        </GestureHandlerRootView>
     );
 }

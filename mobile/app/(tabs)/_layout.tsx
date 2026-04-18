@@ -1,10 +1,12 @@
 import { Tabs, useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
-import { View, Text, ActivityIndicator, TouchableOpacity, Platform, LayoutChangeEvent } from "react-native";
+import { View, Text, ActivityIndicator, TouchableOpacity, Platform, LayoutChangeEvent, Alert, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Home, List, Plus, Tags, BarChart3 } from "lucide-react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from "react-native-reanimated";
+import AddExpenseSheet from "../../components/AddExpenseSheet";
+import BottomSheet, { BottomSheetBackdrop } from "@gorhom/bottom-sheet";
 
 const VISIBLE_TABS = ["dashboard", "transactions", "ai"];
 
@@ -14,7 +16,7 @@ const TAB_META: Record<string, { icon: any; label: string }> = {
     ai: { icon: BarChart3, label: "Analytics" },
 };
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
+function CustomTabBar({ state, descriptors, navigation, onAddPress }: any) {
     const { bottom } = useSafeAreaInsets();
     const tabWidths = useRef<number[]>([]).current;
     const tabXPositions = useRef<number[]>([]).current;
@@ -117,7 +119,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             {/* The Floating Add Button next to the pill */}
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate("add")}
+                onPress={onAddPress}
                 className="w-[60px] h-[60px] bg-[#111827] rounded-full items-center justify-center"
                 style={{
                     shadowColor: '#000',
@@ -137,6 +139,36 @@ export default function TabsLayout() {
     const { isSignedIn, isLoaded } = useAuth();
     const router = useRouter();
 
+    const sheetRef = useRef<BottomSheet>(null);
+    const smsSheetRef = useRef<BottomSheet>(null);
+    const [isSheetOpen, setIsSheetOpen] = useState(false);
+    const [pastedSMS, setPastedSMS] = useState("");
+
+    const openSheet = () => {
+        setIsSheetOpen(true);
+        sheetRef.current?.snapToIndex(0);
+    };
+
+    const handleParseSMS = () => {
+        if (!pastedSMS.trim()) {
+            Alert.alert("Error", "Please paste an SMS first.");
+            return;
+        }
+
+        // Simple banking SMS parsing logic
+        const amountMatch = pastedSMS.match(/(?:INR|Rs\.?|₹)\s?(\d+(?:\.\d+)?)/i);
+        const merchantMatch = pastedSMS.match(/(?:at|to|vpa|merch:)\s*([A-Za-z0-9\s._-]+?)(?:\s*(?:on|using|via|for|ref|\d)|$)/i);
+
+        if (amountMatch || merchantMatch) {
+            // Signal AddExpenseSheet to update its state
+            // We'll pass these as props or use a shared state if needed
+            // For now, let's just close the SMS sheet and notify
+            Alert.alert("SMS Parsed", `Detected Amount: ${amountMatch?.[1] || "N/A"}`);
+        }
+        
+        smsSheetRef.current?.close();
+    };
+
     useEffect(() => {
         if (isLoaded && !isSignedIn) {
             router.replace("/(auth)/sign-in");
@@ -152,17 +184,67 @@ export default function TabsLayout() {
     }
 
     return (
-        <Tabs
-            tabBar={(props) => <CustomTabBar {...props} />}
-            screenOptions={{
-                headerShown: false,
-            }}
-        >
-            <Tabs.Screen name="dashboard" />
-            <Tabs.Screen name="transactions" />
-            <Tabs.Screen name="add" />
-            <Tabs.Screen name="tags" />
-            <Tabs.Screen name="ai" />
-        </Tabs>
+        <View style={{ flex: 1 }}>
+            <Tabs
+                tabBar={(props) => <CustomTabBar {...props} onAddPress={openSheet} />}
+                screenOptions={{
+                    headerShown: false,
+                }}
+            >
+                <Tabs.Screen name="dashboard" />
+                <Tabs.Screen name="transactions" />
+                <Tabs.Screen name="add" options={{ href: null }} />
+                <Tabs.Screen name="tags" options={{ href: null }} />
+                <Tabs.Screen name="ai" />
+            </Tabs>
+            
+            <AddExpenseSheet 
+                ref={sheetRef} 
+                onClose={() => setIsSheetOpen(false)} 
+                onUpgrade={() => router.push("/subscription")}
+                onSMSPress={() => smsSheetRef.current?.expand()}
+                smsData={pastedSMS}
+            />
+
+            {/* Separate SMS Sheet at Layout Level for Total Stability */}
+            <BottomSheet
+                ref={smsSheetRef}
+                index={-1}
+                snapPoints={["60%"]}
+                enablePanDownToClose
+                backgroundStyle={{ backgroundColor: "#F9FAFB", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+                handleIndicatorStyle={{ backgroundColor: "#D1D5DB" }}
+            >
+                <View className="flex-row items-center justify-between px-6 pt-2 pb-6">
+                    <TouchableOpacity onPress={() => smsSheetRef.current?.close()}>
+                        <Text className="text-gray-500 text-base font-geist-md">Cancel</Text>
+                    </TouchableOpacity>
+                    <Text className="text-gray-900 text-lg font-geist-sb">Paste SMS</Text>
+                    <View className="w-10" />
+                </View>
+
+                <View className="px-5">
+                    <View className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                        <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-3">Paste Bank SMS</Text>
+                        <TextInput
+                            className="text-gray-800 text-sm font-geist-md min-h-[140px]"
+                            placeholder="Paste your bank SMS here..."
+                            placeholderTextColor="#9ca3af"
+                            value={pastedSMS}
+                            onChangeText={setPastedSMS}
+                            multiline
+                            textAlignVertical="top"
+                        />
+                    </View>
+
+                    <TouchableOpacity 
+                        onPress={handleParseSMS}
+                        className="w-full mt-6 py-4 rounded-[100px] bg-[#FF6A00] items-center justify-center flex-row"
+                    >
+                        <Text className="text-white font-geist-b text-base">Parse SMS</Text>
+                    </TouchableOpacity>
+                </View>
+            </BottomSheet>
+        </View>
     );
 }
