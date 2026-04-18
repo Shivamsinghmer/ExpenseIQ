@@ -41,7 +41,10 @@ module.exports = {
             input: "#cbd5e1", // Slate 300
             "input-dark": "#475569", // Slate 600
             fontFamily: {
-                sans: ["DM Sans", "System"],
+                sans: ["Geist-Regular", "System"],
+                "geist-md": ["Geist-Medium", "System"],
+                "geist-sb": ["Geist-SemiBold", "System"],
+                "geist-b": ["Geist-Bold", "System"],
                 mono: ["Space Mono", "monospace"],
             },
         },
