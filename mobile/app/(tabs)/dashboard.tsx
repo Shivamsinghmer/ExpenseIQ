@@ -9,6 +9,7 @@ import {
     Alert,
     Platform,
     Dimensions,
+    Image,
 } from "react-native";
 import { LineChart } from "../../components/LineChart";
 import Svg, { Path } from "react-native-svg";
@@ -17,19 +18,21 @@ import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, paymentsAPI, type SummaryResponse, type Transaction } from "../../services/api";
-import { ArrowDown, ArrowUp, File, TrendingUp, TrendingDown, Crown, AlertCircle, Clock } from "lucide-react-native";
+import {
+    ArrowDown, ArrowUp, File, TrendingUp, TrendingDown,
+    Crown, AlertCircle, Clock, MessageSquare, Sparkles,
+    Landmark, Wallet, ChevronRight, List, Flame, RefreshCw, Map
+} from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 
 
 function TransactionItem({ item }: { item: Transaction }) {
     const isIncome = item.type === "INCOME";
     return (
-        <View className="bg-white dark:bg-surface-dark rounded-2xl p-4 mb-3 flex-row items-center border border-border dark:border-border-dark shadow-sm">
+        <View className="bg-white rounded-2xl p-4 mb-3 flex-row items-center border border-gray-100 shadow-sm">
             <View
-                className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-red-50 dark:bg-red-500/10"}`}
+                className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50" : "bg-red-50"}`}
             >
                 {isIncome ? (
                     <TrendingUp size={20} color="#10b981" />
@@ -38,8 +41,8 @@ function TransactionItem({ item }: { item: Transaction }) {
                 )}
             </View>
             <View className="flex-1">
-                <Text className="text-slate-900 dark:text-white font-bold text-base">{item.title}</Text>
-                <Text className="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">
+                <Text className="text-gray-900 font-geist-sb text-base">{item.title}</Text>
+                <Text className="text-gray-400 text-xs font-geist-md mt-0.5">
                     {new Date(item.date).toLocaleDateString("en-IN", {
                         month: "short",
                         day: "numeric",
@@ -47,7 +50,7 @@ function TransactionItem({ item }: { item: Transaction }) {
                     {item.tags.length > 0 && ` • ${item.tags.map((t) => t.name).join(", ")}`}
                 </Text>
             </View>
-            <Text className={`font-bold text-base ${isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+            <Text className={`font-geist-b text-base ${isIncome ? "text-emerald-600" : "text-red-500"}`}>
                 {isIncome ? "+" : "-"}₹{item.amount.toFixed(2)}
             </Text>
         </View>
@@ -87,8 +90,8 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: 'Helvetica', 'Arial', sans-serif; padding: 40px; color: #1a1a1a; background: #fff; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #ff3333; padding-bottom: 20px; }
-            .header h1 { font-size: 28px; color: #ff3333; margin-bottom: 4px; letter-spacing: 1px; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #FF6A00; padding-bottom: 20px; }
+            .header h1 { font-size: 28px; color: #FF6A00; margin-bottom: 4px; letter-spacing: 1px; }
             .header p { color: #666; font-size: 12px; }
             .summary { display: flex; gap: 16px; margin-bottom: 30px; }
             .summary-card { flex: 1; padding: 16px; border: 2px solid #000; background: #fff; }
@@ -101,13 +104,13 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
             th { background: #000; color: #fff; text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
             td { padding: 10px 12px; border-bottom: 1px solid #e0e0e0; font-size: 12px; }
             tr:nth-child(even) { background: #f9f9f9; }
-            .section-title { font-size: 16px; font-weight: 900; margin-bottom: 12px; color: #000; border-left: 4px solid #ff3333; padding-left: 12px; }
+            .section-title { font-size: 16px; font-weight: 900; margin-bottom: 12px; color: #000; border-left: 4px solid #FF6A00; padding-left: 12px; }
             .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 2px solid #000; color: #999; font-size: 10px; }
         </style>
     </head>
     <body>
         <div class="header">
-            <h1>ExpenseIQ</h1>
+            <h1>ExpensePal</h1>
             <p>Transaction Report — Generated on ${new Date().toDateString()}</p>
         </div>
         <div class="summary">
@@ -139,7 +142,7 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
             <tbody>${rows}</tbody>
         </table>
         <div class="footer">
-            <p>ExpenseIQ — Smart Financial Tracking</p>
+            <p>ExpensePal — Smart Financial Tracking</p>
         </div>
     </body>
     </html>`;
@@ -149,9 +152,9 @@ export default function Dashboard() {
     const { signOut } = useAuth();
     const { user } = useUser();
     const router = useRouter();
-    const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const [pdfLoading, setPdfLoading] = useState(false);
+    const [catTab, setCatTab] = useState<"current" | "prev">("current");
     const queryClient = useQueryClient();
 
     const handleSignOut = async () => {
@@ -205,7 +208,6 @@ export default function Dashboard() {
 
     const showTrialBanner = !subscription?.isPro && subscription?.trialEndDate;
 
-
     // Prepare Chart Data
     const chartDates = summary?.chartData?.map((d) => {
         const date = new Date(d.date);
@@ -230,26 +232,20 @@ export default function Dashboard() {
                 return;
             }
 
-            console.log(`[PDF] Generating report for ${allTransactions.length} transactions`);
             const html = generatePdfHtml(allTransactions, summary);
             const { uri } = await Print.printToFileAsync({
                 html,
                 base64: false
             });
 
-            console.log("[PDF] File generated at:", uri);
-
             if (await Sharing.isAvailableAsync()) {
                 const options: Sharing.SharingOptions = {
                     mimeType: "application/pdf",
-                    dialogTitle: "ExpenseIQ Transactions Report",
+                    dialogTitle: "ExpensePal Transactions Report",
                 };
-
-                // UTI is only for iOS
                 if (Platform.OS === "ios") {
                     options.UTI = "com.adobe.pdf";
                 }
-
                 await Sharing.shareAsync(uri, options);
             } else {
                 Alert.alert("Success", `PDF saved to: ${uri}`);
@@ -264,9 +260,9 @@ export default function Dashboard() {
 
     if (isLoading) {
         return (
-            <View className="flex-1 items-center justify-center bg-background dark:bg-background-dark">
-                <ActivityIndicator size="large" color={isDark ? "#818cf8" : "#4f46e5"} />
-                <Text className="text-muted-fg dark:text-muted-fg-dark mt-4">Loading your finances...</Text>
+            <View className="flex-1 items-center justify-center bg-[#F5F5F5]">
+                <ActivityIndicator size="large" color="#FF6A00" />
+                <Text className="text-gray-400 mt-4 font-geist-md">Loading your finances...</Text>
             </View>
         );
     }
@@ -287,43 +283,56 @@ export default function Dashboard() {
         }
     };
 
-    // Combine refresh
     const handleRefresh = async () => {
         await Promise.all([refetch(), refetchSubscription()]);
     };
 
+    const firstName = user?.firstName || "User";
+    const today = new Date();
+    const dateStr = today.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    const totalExpense = summary?.totalExpense || 0;
+    const budget = 20000; // Default budget – can be updated later
+    const remaining = Math.max(budget - totalExpense, 0);
+    const spendPercent = Math.min((totalExpense / budget) * 100, 100);
+    const expenseCount = summary?.expenseCount || 0;
+    const avgPerDay = expenseCount > 0 ? Math.round(totalExpense / 30) : 0;
+
+    // Get current and previous month for category tabs
+    const currentMonthName = today.toLocaleDateString("en-IN", { month: "long" });
+    const prevMonth = new Date(today);
+    prevMonth.setMonth(prevMonth.getMonth() - 1);
+    const prevMonthName = prevMonth.toLocaleDateString("en-IN", { month: "short" });
+
     return (
         <ScrollView
-            className="flex-1 bg-background dark:bg-background-dark"
-            contentContainerStyle={{ paddingBottom: 120 }}
+            className="flex-1 bg-[#F5F5F5]"
+            contentContainerStyle={{ paddingBottom: 140 }}
             refreshControl={
-                <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor={isDark ? "#818cf8" : "#6366f1"} />
+                <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor="#FF6A00" />
             }
         >
             {/* Trial/Pro Status Banner */}
             {showTrialBanner && (
                 <View
-                    className={`px-4 pb-3 flex-row items-center justify-between ${new Date() > new Date(subscription!.trialEndDate!) ? "bg-red-500" : "bg-indigo-600"
+                    className={`px-4 pb-3 flex-row items-center justify-between ${new Date() > new Date(subscription!.trialEndDate!) ? "bg-red-500" : "bg-[#FF6A00]"
                         }`}
                     style={{ paddingTop: insets.top + 12 }}
                 >
                     <View className="flex-row items-center flex-1">
                         {new Date() > new Date(subscription!.trialEndDate!) ? (
-                            <AlertCircle size={18} color="white" className="mr-2" />
+                            <AlertCircle size={18} color="white" />
                         ) : (
-                            <Clock size={18} color="white" className="mr-2" />
+                            <Clock size={18} color="white" />
                         )}
-                        <Text className="text-white font-bold text-xs">
+                        <Text className="text-white font-geist-b text-xs ml-2 flex-1">
                             {new Date() > new Date(subscription!.trialEndDate!)
-                                ? "Free Trial Ended. Upgrade to Pro to unlock all features."
+                                ? "Free trial ended. Upgrade to Pro."
                                 : (() => {
                                     const diff = new Date(subscription!.trialEndDate!).getTime() - new Date().getTime();
                                     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                                     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                                    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-                                    if (days > 0) return `Free Trial Active: ${days}d ${hours}h remaining`;
-                                    return `Free Trial Active: ${hours}h ${minutes}m remaining`;
+                                    if (days > 0) return `Trial: ${days}d ${hours}h left`;
+                                    return `Trial: ${hours}h left`;
                                 })()}
                         </Text>
                     </View>
@@ -331,184 +340,275 @@ export default function Dashboard() {
                         onPress={() => router.push("/subscription")}
                         className="bg-white/20 px-3 py-1.5 rounded-full"
                     >
-                        <Text className="text-white font-black text-[10px] uppercase">Upgrade</Text>
+                        <Text className="text-white font-geist-b text-[10px] uppercase">Upgrade</Text>
                     </TouchableOpacity>
                 </View>
             )}
 
-            {/* Header Section */}
+            {/* ─── Header: Greeting + Avatar ─── */}
             <View
-                className="bg-transparent pb-6 px-6 rounded-b-[20px] mb-6"
+                className="px-6 pb-4"
                 style={{ paddingTop: showTrialBanner ? 20 : insets.top + 20 }}
             >
-                <View className="flex-row items-center justify-between mb-8">
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        className="flex-1 mr-4"
+                <View className="flex-row items-center justify-between">
+                    <View>
+                        <Text className="text-gray-900 text-2xl font-geist-b">Hello, {firstName} 👋</Text>
+                        <Text className="text-gray-400 text-sm font-geist-md mt-1">{dateStr}</Text>
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => {
+                            Alert.alert("Account", "Manage your account", [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "Sign Out", style: "destructive", onPress: handleSignOut },
+                            ]);
+                        }}
                     >
-                        <View>
-                            <Text className="text-black/60 dark:text-white/60 text-sm font-bold uppercase tracking-widest mb-1">Total Balance</Text>
-                            <Text className="text-black dark:text-white text-5xl font-black">₹{summary?.balance.toFixed(2) || "0.00"}</Text>
-                        </View>
-                    </ScrollView>
-                    <View className="flex-row items-center gap-2">
-                        <TouchableOpacity
-                            onPress={handleProPress}
-                            className={`p-[10px] rounded-full items-center justify-center ${subscription?.isPro ? "bg-indigo-100 dark:bg-indigo-900/30" : "bg-black/10 dark:bg-white/20"}`}
-                            accessibilityLabel="Premium"
-                        >
-                            {subscription?.isPro ? (
-                                <Text className="font-bold text-indigo-600 dark:text-indigo-400 text-xs">PRO</Text>
-                            ) : (
-                                <Crown size={22} color={isDark ? "white" : "black"} />
-                            )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => {
-                                Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-                                    { text: "Cancel", style: "cancel" },
-                                    { text: "Sign Out", style: "destructive", onPress: handleSignOut },
-                                ]);
-                            }}
-                            className="bg-black/10 dark:bg-white/20 p-[10px] rounded-full items-center justify-center"
-                            accessibilityLabel="Sign Out"
-                        >
-                            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={isDark ? "white" : "black"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                                <Path d="M16 17l5-5-5-5" />
-                                <Path d="M21 12H9" />
-                            </Svg>
-                        </TouchableOpacity>
-                    </View>
+                        {user?.imageUrl ? (
+                            <Image
+                                source={{ uri: user.imageUrl }}
+                                className="w-10 h-10 rounded-full border-2 border-[#FF6A00]"
+                            />
+                        ) : (
+                            <View className="w-10 h-10 rounded-full bg-[#FF6A00] items-center justify-center">
+                                <Text className="text-white font-geist-b text-lg">{firstName.charAt(0)}</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
                 </View>
+            </View>
 
-                {/* Quick Stats (Income/Expense) */}
-                <View className="flex-row gap-4">
-                    <View className="flex-1 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <View className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 items-center justify-center">
-                            <ArrowUp size={16} color="#10b981" />
-                        </View>
-                        <View>
-                            <Text className="text-black/60 dark:text-white/80 text-lg font-medium">Income</Text>
-                            <Text className="text-black dark:text-white text-xl font-bold">₹{summary?.totalIncome.toFixed(0)}</Text>
-                        </View>
+            {/* ─── Total Monthly Spend Card ─── */}
+            <View className="px-5 mb-4">
+                <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+                    <Text className="text-gray-500 text-center text-sm font-geist-md mb-2">Total Monthly Spend</Text>
+                    <Text className="text-[#FF6A00] text-center text-4xl font-geist-b mb-4">
+                        ₹{totalExpense.toLocaleString("en-IN")}
+                    </Text>
+
+                    {/* Progress Bar */}
+                    <View className="h-3 bg-gray-100 rounded-full overflow-hidden mb-3">
+                        <View
+                            className="h-full rounded-full"
+                            style={{
+                                width: `${spendPercent}%`,
+                                backgroundColor: spendPercent > 80 ? '#ef4444' : '#22c55e',
+                            }}
+                        />
                     </View>
-                    <View className="flex-1 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <View className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-500/20 items-center justify-center">
-                            <ArrowDown size={16} color="#ef4444" />
-                        </View>
+
+                    <View className="flex-row justify-between">
                         <View>
-                            <Text className="text-black/60 dark:text-white/80 text-lg font-medium">Expense</Text>
-                            <Text className="text-black dark:text-white text-xl font-bold">₹{summary?.totalExpense.toFixed(0)}</Text>
+                            <Text className="text-gray-400 text-xs font-geist-md">Remaining</Text>
+                            <Text className="text-emerald-600 text-lg font-geist-b">₹{remaining.toLocaleString("en-IN")}</Text>
+                        </View>
+                        <View className="items-end">
+                            <Text className="text-gray-400 text-xs font-geist-md">Budget</Text>
+                            <Text className="text-gray-800 text-lg font-geist-b">₹{budget.toLocaleString("en-IN")}</Text>
                         </View>
                     </View>
                 </View>
             </View>
 
-            {/* Main Content */}
-            <View className="px-5">
-
-                {/* PDF Download Button */}
-                <TouchableOpacity
-                    onPress={handleDownloadPdf}
-                    disabled={pdfLoading}
-                    className="bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 rounded-2xl py-4 flex-row items-center justify-center mb-6 gap-3"
-                    activeOpacity={0.7}
-                >
-                    {pdfLoading ? (
-                        <ActivityIndicator size="small" color={isDark ? "white" : "black"} />
-                    ) : (
-                        <>
-                            <File size={18} color={isDark ? "white" : "black"} />
-                            <Text className={isDark ? "text-white font-semibold text-md" : "text-black font-semibold text-md"}>
-                                Download Report
-                            </Text>
-                        </>
-                    )}
-                </TouchableOpacity>
-
-                {/* Financial Trend Chart */}
-                <View className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
-                    <View className="flex-row items-center justify-between mb-4">
-                        <Text className="text-slate-800 dark:text-white text-lg font-bold">Analysis</Text>
-                        {/* Simple Time Range */}
-                        <View className="flex-row bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-                            {(["1W", "1M", "1Y"] as const).map((r) => (
-                                <TouchableOpacity
-                                    key={r}
-                                    onPress={() => setRange(r)}
-                                    className={`px-3 py-1.5 rounded-md ${range === r ? "bg-white dark:bg-slate-600 shadow-sm" : ""}`}
-                                >
-                                    <Text className={`text-xs font-bold ${range === r ? "text-primary dark:text-primary-dark" : "text-slate-400"}`}>
-                                        {r}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+            {/* ─── Stat Cards: Expenses, Avg/Day, Streak ─── */}
+            <View className="px-5 flex-row gap-3 mb-6">
+                <View className="flex-1 bg-white rounded-[20px] p-4 shadow-sm border border-gray-100 items-start">
+                    <View className="w-9 h-9 rounded-xl bg-orange-50 items-center justify-center mb-3">
+                        <List size={18} color="#FF6A00" />
                     </View>
-
-                    <View className="items-center overflow-hidden">
-                        {summary?.chartData && summary.chartData.length > 0 ? (
-                            <LineChart
-                                datasets={[
-                                    { data: incomeData, color: "#10b981" },
-                                    { data: expenseData, color: "#ef4444" },
-                                ]}
-                                labels={chartDates}
-                                width={Dimensions.get("window").width - 80}
-                                height={200}
-                                isDark={isDark}
-                            />
-                        ) : (
-                            <View className="h-40 items-center justify-center w-full bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-                                <Text className="text-slate-400 text-sm">No data available</Text>
-                            </View>
-                        )}
-                    </View>
+                    <Text className="text-gray-400 text-xs font-geist-md">Expenses</Text>
+                    <Text className="text-gray-900 text-xl font-geist-b">{expenseCount}</Text>
                 </View>
-
-                {/* Tag Breakdown */}
-                {summary?.tagBreakdown && summary.tagBreakdown.length > 0 && (
-                    <View className="mb-6">
-                        <Text className="text-slate-800 dark:text-white text-lg font-bold mb-4 ml-1">Spending</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="pb-2">
-                            {summary.tagBreakdown.map((tag) => (
-                                <View key={tag.id} className="bg-white dark:bg-surface-dark mr-3 p-4 rounded-2xl border border-border dark:border-border-dark shadow-sm min-w-[140px]">
-                                    <View className="flex-row items-center mb-3">
-                                        <View className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: tag.color }} />
-                                        <Text className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase" numberOfLines={1}>{tag.name}</Text>
-                                    </View>
-                                    <Text className="text-slate-800 dark:text-white text-xl font-bold">₹{tag.totalSpent.toFixed(0)}</Text>
-                                    <Text className="text-slate-400 text-xs mt-1">{tag.count} txns</Text>
-                                </View>
-                            ))}
-                        </ScrollView>
+                <View className="flex-1 bg-white rounded-[20px] p-4 shadow-sm border border-gray-100 items-start">
+                    <View className="w-9 h-9 rounded-xl bg-orange-50 items-center justify-center mb-3">
+                        <TrendingUp size={18} color="#FF6A00" />
                     </View>
-                )}
+                    <Text className="text-gray-400 text-xs font-geist-md">Avg/Day</Text>
+                    <Text className="text-gray-900 text-xl font-geist-b">₹{avgPerDay.toLocaleString("en-IN")}</Text>
+                </View>
+                <View className="flex-1 bg-white rounded-[20px] p-4 shadow-sm border border-gray-100 items-start">
+                    <View className="w-9 h-9 rounded-xl bg-orange-50 items-center justify-center mb-3">
+                        <Flame size={18} color="#FF6A00" />
+                    </View>
+                    <Text className="text-gray-400 text-xs font-geist-md">Streak</Text>
+                    <Text className="text-gray-900 text-xl font-geist-b">7 days</Text>
+                </View>
+            </View>
 
-                {/* Recent Transactions */}
-                <View>
-                    <View className="flex-row items-center justify-between mb-4">
-                        <Text className="text-slate-800 dark:text-white text-lg font-bold ml-1">Recent Activity</Text>
-                        <TouchableOpacity onPress={() => router.push("/(tabs)/transactions")}>
-                            <Text className="text-primary dark:text-primary-dark text-sm font-semibold">See All</Text>
+            {/* ─── Tools Grid ─── */}
+            <View className="px-5 mb-6">
+                <View className="flex-row items-center justify-between mb-4">
+                    <Text className="text-gray-900 text-xl font-geist-b">Tools</Text>
+                </View>
+                <View className="flex-row gap-3 mb-3">
+                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                        <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                            <File size={20} color="#FF6A00" />
+                        </View>
+                        <Text className="text-gray-900 text-xs font-geist-sb">Scan & Record</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                        onPress={() => router.push("/(tabs)/ai")}
+                    >
+                        <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                            <MessageSquare size={20} color="#FF6A00" />
+                        </View>
+                        <Text className="text-gray-900 text-xs font-geist-sb">Ask Money</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                        <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                            <Sparkles size={20} color="#FF6A00" />
+                        </View>
+                        <Text className="text-gray-900 text-xs font-geist-sb">Money Story</Text>
+                    </TouchableOpacity>
+                </View>
+                <View className="flex-row gap-3">
+                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                        <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                            <Landmark size={20} color="#FF6A00" />
+                        </View>
+                        <Text className="text-gray-900 text-xs font-geist-sb">EMI Tracker</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                        <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                            <Wallet size={20} color="#FF6A00" />
+                        </View>
+                        <Text className="text-gray-900 text-xs font-geist-sb">Envelopes</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                        onPress={handleDownloadPdf}
+                        disabled={pdfLoading}
+                    >
+                        {pdfLoading ? (
+                            <ActivityIndicator size="small" color="#FF6A00" />
+                        ) : (
+                            <>
+                                <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                                    <File size={20} color="#FF6A00" />
+                                </View>
+                                <Text className="text-gray-900 text-xs font-geist-sb">Report</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* ─── Smart Insights ─── */}
+            <View className="px-5 mb-6">
+                <View className="flex-row items-center mb-4">
+                    <Text className="text-gray-900 text-xl font-geist-b ml-2">Smart Insights</Text>
+                </View>
+                {(() => {
+                    const insights: { emoji: string; text: string }[] = [];
+
+                    if (totalExpense > 0 && budget > 0) {
+                        const pct = Math.round((totalExpense / budget) * 100);
+                        if (pct >= 80) {
+                            insights.push({ emoji: "⚠️", text: `You've used ${pct}% of your monthly budget. Time to slow down!` });
+                        } else if (pct <= 40) {
+                            insights.push({ emoji: "🎉", text: `Great job! Only ${pct}% of your budget used so far.` });
+                        } else {
+                            insights.push({ emoji: "📊", text: `You've spent ${pct}% of your ₹${budget.toLocaleString("en-IN")} budget.` });
+                        }
+                    }
+
+                    if (avgPerDay > 0) {
+                        insights.push({ emoji: "💡", text: `Your daily average is ₹${avgPerDay.toLocaleString("en-IN")}. That's ₹${(avgPerDay * 30).toLocaleString("en-IN")}/month.` });
+                    }
+
+                    if (expenseCount > 0) {
+                        const avgTxn = Math.round(totalExpense / expenseCount);
+                        insights.push({ emoji: "🧾", text: `Average transaction: ₹${avgTxn.toLocaleString("en-IN")} across ${expenseCount} expenses.` });
+                    }
+
+                    if (summary?.tagBreakdown && summary.tagBreakdown.length > 0) {
+                        const topTag = summary.tagBreakdown[0];
+                        insights.push({ emoji: "🏷️", text: `Top category: ${topTag.name} with ₹${topTag.totalSpent.toLocaleString("en-IN")} spent.` });
+                    }
+
+                    if (remaining > 0 && budget > 0) {
+                        const daysLeft = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate();
+                        if (daysLeft > 0) {
+                            const dailyBudget = Math.round(remaining / daysLeft);
+                            insights.push({ emoji: "🎯", text: `You can spend ₹${dailyBudget.toLocaleString("en-IN")}/day for the next ${daysLeft} days.` });
+                        }
+                    }
+
+                    if (insights.length === 0) {
+                        insights.push({ emoji: "✨", text: "Start tracking expenses to get personalized insights!" });
+                    }
+
+                    return insights.slice(0, 3).map((insight, i) => (
+                        <View key={i} className="bg-white rounded-2xl px-4 py-3.5 mb-2.5 flex-row items-center border border-gray-100 shadow-sm">
+                            <Text className="text-lg mr-3">{insight.emoji}</Text>
+                            <Text className="text-gray-600 text-sm font-geist-md flex-1 leading-5">{insight.text}</Text>
+                        </View>
+                    ));
+                })()}
+            </View>
+
+            {/* ─── Spending by Category ─── */}
+            {summary?.tagBreakdown && summary.tagBreakdown.length > 0 && (
+                <View className="px-5 mb-6">
+                    <Text className="text-gray-900 text-xl font-geist-b mb-4">Spending by Category</Text>
+
+                    {/* Month Tabs */}
+                    <View className="flex-row gap-2 mb-4">
+                        <TouchableOpacity
+                            onPress={() => setCatTab("current")}
+                            className={`px-5 py-2 rounded-full ${catTab === "current" ? "bg-[#FF6A00]" : "bg-white border border-gray-200"}`}
+                        >
+                            <Text className={`text-sm font-geist-sb ${catTab === "current" ? "text-white" : "text-gray-500"}`}>
+                                This Month
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => setCatTab("prev")}
+                            className={`px-5 py-2 rounded-full ${catTab === "prev" ? "bg-[#FF6A00]" : "bg-white border border-gray-200"}`}
+                        >
+                            <Text className={`text-sm font-geist-sb ${catTab === "prev" ? "text-white" : "text-gray-500"}`}>
+                                {prevMonthName}
+                            </Text>
                         </TouchableOpacity>
                     </View>
 
-                    {summary?.recentTransactions && summary.recentTransactions.length > 0 ? (
-                        summary.recentTransactions.map((transaction) => (
-                            <TransactionItem key={transaction.id} item={transaction} />
-                        ))
-                    ) : (
-                        <View className="bg-white border border-gray-400 border-dashed rounded-2xl p-6 items-center justify-center">
-                            <File size={20} color="gray" style={{ marginBottom: 6 }} />
-                            <Text className="text-slate-500 dark:text-slate-400 text-sm font-medium text-center">
-                                No transactions yet.{"\n"}Start tracking your expenses!
-                            </Text>
+                    {/* Category Items */}
+                    {summary.tagBreakdown.map((tag) => (
+                        <View key={tag.id} className="bg-white rounded-2xl p-4 mb-3 flex-row items-center border border-gray-100 shadow-sm">
+                            <View className="w-4 h-4 rounded-full mr-3" style={{ backgroundColor: tag.color }} />
+                            <View className="flex-1">
+                                <Text className="text-gray-900 text-sm font-geist-sb">{tag.name}</Text>
+                                <Text className="text-gray-400 text-xs font-geist-md">{tag.count} transactions</Text>
+                            </View>
+                            <Text className="text-gray-900 text-base font-geist-b">₹{tag.totalSpent.toLocaleString("en-IN")}</Text>
                         </View>
-                    )}
+                    ))}
                 </View>
+            )}
+
+
+            {/* ─── Recent Transactions ─── */}
+            <View className="px-5">
+                <View className="flex-row items-center justify-between mb-4">
+                    <Text className="text-gray-900 text-xl font-geist-b">Recent Activity</Text>
+                    <TouchableOpacity onPress={() => router.push("/(tabs)/transactions")}>
+                        <Text className="text-[#FF6A00] text-sm font-geist-sb">See All</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {summary?.recentTransactions && summary.recentTransactions.length > 0 ? (
+                    summary.recentTransactions.map((transaction) => (
+                        <TransactionItem key={transaction.id} item={transaction} />
+                    ))
+                ) : (
+                    <View className="bg-white border border-gray-200 border-dashed rounded-2xl p-6 items-center justify-center">
+                        <File size={20} color="#d1d5db" style={{ marginBottom: 6 }} />
+                        <Text className="text-gray-400 text-sm font-geist-md text-center">
+                            No transactions yet.{"\n"}Start tracking your expenses!
+                        </Text>
+                    </View>
+                )}
             </View>
         </ScrollView>
     );

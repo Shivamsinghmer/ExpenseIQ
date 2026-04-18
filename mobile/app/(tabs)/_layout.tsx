@@ -1,30 +1,134 @@
 import { Tabs, useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
-import { View, Text, ActivityIndicator, Platform } from "react-native";
-import { useTheme } from "../../providers/theme-provider";
-import { useEffect } from "react";
-import { LayoutDashboard, ArrowRightLeft, Plus, Tags, Sparkles } from "lucide-react-native";
+import { View, Text, ActivityIndicator, TouchableOpacity, Platform, LayoutChangeEvent } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useEffect, useRef, useState } from "react";
+import { Home, List, Plus, Tags, BarChart3 } from "lucide-react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from "react-native-reanimated";
 
-function TabIcon({
-    icon: Icon,
-    color,
-    name,
-    focused
-}: {
-    icon: any;
-    color: string;
-    name: string;
-    focused: boolean;
-}) {
+const VISIBLE_TABS = ["dashboard", "transactions", "ai"];
+
+const TAB_META: Record<string, { icon: any; label: string }> = {
+    dashboard: { icon: Home, label: "Home" },
+    transactions: { icon: List, label: "Transactions" },
+    ai: { icon: BarChart3, label: "Analytics" },
+};
+
+function CustomTabBar({ state, descriptors, navigation }: any) {
+    const { bottom } = useSafeAreaInsets();
+    const tabWidths = useRef<number[]>([]).current;
+    const tabXPositions = useRef<number[]>([]).current;
+    const [measured, setMeasured] = useState(false);
+
+    // Filter to only visible tabs and find which visible index is active
+    const visibleRoutes = state.routes.filter((r: any) => VISIBLE_TABS.includes(r.name));
+    const activeVisibleIndex = visibleRoutes.findIndex(
+        (r: any) => state.routes[state.index]?.name === r.name
+    );
+
+    const indicatorX = useSharedValue(0);
+    const indicatorW = useSharedValue(0);
+
+    useEffect(() => {
+        if (measured && activeVisibleIndex >= 0 && tabXPositions[activeVisibleIndex] !== undefined) {
+            const config = { duration: 250, easing: Easing.out(Easing.quad) };
+            indicatorX.value = withTiming(tabXPositions[activeVisibleIndex], config);
+            indicatorW.value = withTiming(tabWidths[activeVisibleIndex], config);
+        }
+    }, [activeVisibleIndex, measured]);
+
+    const animatedIndicatorStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: indicatorX.value }],
+        width: indicatorW.value,
+    }));
+
+    const handleTabLayout = (index: number, event: LayoutChangeEvent) => {
+        const { x, width } = event.nativeEvent.layout;
+        tabXPositions[index] = x;
+        tabWidths[index] = width;
+        if (index === visibleRoutes.length - 1) {
+            setMeasured(true);
+            // Set initial position without animation
+            if (activeVisibleIndex >= 0) {
+                indicatorX.value = tabXPositions[activeVisibleIndex] || 0;
+                indicatorW.value = tabWidths[activeVisibleIndex] || 0;
+            }
+        }
+    };
+
     return (
-        <View className={`items-center justify-center gap-0 ${focused ? 'bg-black px-4 py-5 rounded-full min-w-[80px]' : 'px-2 py-2 min-w-[60px]'}`}>
-            <Icon size={24} color={focused ? "white" : "#94a3b8"} />
-            <Text
-                className={`text-[10px] font-bold ${focused ? "text-white" : "text-slate-400"} text-center`}
-                numberOfLines={1}
+        <View className="absolute flex-row items-center gap-3" style={{ bottom: Platform.OS === 'ios' ? bottom + 6 : 16, left: 20, right: 20 }}>
+            {/* The main pill for navigation */}
+            <View
+                className="flex-1 rounded-[100px] overflow-hidden border border-gray-100/60 bg-white"
+                style={{
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 24,
+                    elevation: 16,
+                }}
             >
-                {name}
-            </Text>
+                <View className="flex-row w-full px-1 items-center h-[60px]">
+                    {/* Animated sliding indicator */}
+                    {measured && (
+                        <Animated.View
+                            className="absolute h-[52px] rounded-full bg-[#FF8533]"
+                            style={[animatedIndicatorStyle, { top: 4 }]}
+                        />
+                    )}
+
+                    {visibleRoutes.map((route: any, index: number) => {
+                        const isFocused = state.routes[state.index]?.name === route.name;
+                        const meta = TAB_META[route.name];
+                        if (!meta) return null;
+                        const Icon = meta.icon;
+
+                        const onPress = () => {
+                            const event = navigation.emit({
+                                type: 'tabPress',
+                                target: route.key,
+                                canPreventDefault: true,
+                            });
+
+                            if (!isFocused && !event.defaultPrevented) {
+                                navigation.navigate(route.name, route.params);
+                            }
+                        };
+
+                        return (
+                            <TouchableOpacity
+                                key={route.key}
+                                onPress={onPress}
+                                onLayout={(e) => handleTabLayout(index, e)}
+                                activeOpacity={0.7}
+                                className="flex-1 items-center justify-center h-[52px] rounded-full"
+                            >
+                                <Icon size={22} color={isFocused ? "#FFFFFF" : "#475569"} strokeWidth={isFocused ? 2.5 : 2} />
+                                <Text className={`text-[10px] mt-0.5 ${isFocused ? 'text-white font-geist-b' : 'text-slate-500 font-geist-md'}`}>
+                                    {meta.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </View>
+
+            {/* The Floating Add Button next to the pill */}
+            <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate("add")}
+                className="w-[60px] h-[60px] bg-[#111827] rounded-full items-center justify-center"
+                style={{
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 8 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 20,
+                    elevation: 16,
+                }}
+            >
+                <Plus size={32} color="#FFFFFF" strokeWidth={1.5} />
+            </TouchableOpacity>
         </View>
     );
 }
@@ -49,91 +153,16 @@ export default function TabsLayout() {
 
     return (
         <Tabs
+            tabBar={(props) => <CustomTabBar {...props} />}
             screenOptions={{
                 headerShown: false,
-                tabBarShowLabel: false,
-                tabBarStyle: {
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    elevation: 0,
-                    backgroundColor: "white",
-                    borderTopColor: "#f1f5f9",
-                    borderTopWidth: 1,
-                    height: Platform.OS === "ios" ? 100 : 80,
-                    paddingTop: 10,
-                    paddingHorizontal: 20,
-                },
             }}
         >
-            <Tabs.Screen
-                name="dashboard"
-                options={{
-                    title: "Dashboard",
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon
-                            icon={LayoutDashboard}
-                            color={focused ? "black" : "gray"}
-                            name="Home"
-                            focused={focused}
-                        />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="transactions"
-                options={{
-                    title: "Transactions",
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon
-                            icon={ArrowRightLeft}
-                            color={focused ? "black" : "gray"}
-                            name="Txns"
-                            focused={focused}
-                        />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="add"
-                options={{
-                    title: "Add",
-                    tabBarIcon: ({ focused }) => (
-                        <View className="bg-black h-16 w-16 rounded-full items-center justify-center shadow-lg shadow-gray-400 -mt-12">
-                            <Plus size={32} color="white" />
-                        </View>
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="tags"
-                options={{
-                    title: "Tags",
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon
-                            icon={Tags}
-                            color={focused ? "black" : "gray"}
-                            name="Tags"
-                            focused={focused}
-                        />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="ai"
-                options={{
-                    title: "AI",
-                    tabBarIcon: ({ focused }) => (
-                        <TabIcon
-                            icon={Sparkles}
-                            color={focused ? "black" : "gray"}
-                            name="AI"
-                            focused={focused}
-                        />
-                    ),
-                }}
-            />
+            <Tabs.Screen name="dashboard" />
+            <Tabs.Screen name="transactions" />
+            <Tabs.Screen name="add" />
+            <Tabs.Screen name="tags" />
+            <Tabs.Screen name="ai" />
         </Tabs>
     );
 }
