@@ -3,7 +3,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { View, Text, ActivityIndicator, TouchableOpacity, Platform, LayoutChangeEvent, Alert, TextInput, Modal, KeyboardAvoidingView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Home, List, Plus, Tags, BarChart3, X, Search } from "lucide-react-native";
+import { Home, List, Plus, BarChart3, X, Search } from "lucide-react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from "react-native-reanimated";
 import AddExpenseSheet from "../../components/AddExpenseSheet";
 import BottomSheet from "@gorhom/bottom-sheet";
@@ -194,7 +194,6 @@ export default function TabsLayout() {
                 <Tabs.Screen name="dashboard" />
                 <Tabs.Screen name="transactions" />
                 <Tabs.Screen name="add" options={{ href: null }} />
-                <Tabs.Screen name="tags" options={{ href: null }} />
                 <Tabs.Screen name="analytics" />
             </Tabs>
 

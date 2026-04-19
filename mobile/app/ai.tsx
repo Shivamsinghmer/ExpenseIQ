@@ -13,6 +13,8 @@ import {
     Bot, ArrowDownLeft, ArrowUpRight 
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
+import { useUser } from "@clerk/clerk-expo";
+import SkeletonLoader from "../components/SkeletonLoader";
 
 interface ChatMessage {
     id: string;
@@ -25,6 +27,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function AI() {
     const router = useRouter();
+    const { user } = useUser();
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const queryClient = useQueryClient();
@@ -32,11 +35,24 @@ export default function AI() {
     const [input, setInput] = useState("");
     const flatListRef = useRef<FlatList>(null);
 
+    // Fetch summary to check if user has data
+    const { data: summary } = useQuery({
+        queryKey: ["summary"],
+        queryFn: async () => {
+            const res = await transactionsAPI.getSummary();
+            return res.data;
+        },
+    });
+
+    const hasData = (summary?.expenseCount || 0) > 0;
+
     // Initial welcome message
     const welcomeMessage: ChatMessage = {
         id: "welcome",
         role: "assistant",
-        content: "Buddy, You have -/8.6k... on record. Ask me anything — like \"how much did I spend on food?\" or \"where can I save more?\" I'll crunch the numbers for you.",
+        content: hasData 
+            ? `Buddy, You have ₹${summary?.totalExpense.toLocaleString("en-IN")} spent this month. Ask me anything — like "how much did I spend on food?" or "where can I save more?"`
+            : "Add a transaction to continue! Once you start tracking, I can help you crunch the numbers and find ways to save. 💸",
         timestamp: new Date(),
     };
 
@@ -57,6 +73,7 @@ export default function AI() {
             setMessages(allMessages);
             return history;
         },
+        enabled: !!summary, // Wait for summary to know which welcome message to show
     });
 
     const askMutation = useMutation({
@@ -103,9 +120,11 @@ export default function AI() {
         return (
             <View className={`mb-6 px-4 flex-row ${isUser ? "justify-end" : "justify-start"}`}>
                 {!isUser && (
-                    <View className="w-8 h-8 rounded-full bg-blue-50 items-center justify-center mr-2 self-start mt-1">
-                        <Text className="text-blue-600 font-geist-b text-sm">R</Text>
-                    </View>
+                    <Image 
+                        source={require("../assets/logo.png")} 
+                        className="w-8 h-8 rounded-full mr-2 self-start mt-1"
+                        resizeMode="cover"
+                    />
                 )}
                 <View
                     style={{ maxWidth: isUser ? "75%" : "85%" }}
@@ -127,9 +146,10 @@ export default function AI() {
                     </Text>
                 </View>
                 {isUser && (
-                    <View className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center ml-2 self-start mt-1">
-                        <Text className="text-gray-400 font-geist-b text-xs">M</Text>
-                    </View>
+                    <Image 
+                        source={{ uri: user?.imageUrl }} 
+                        className="w-8 h-8 rounded-full ml-2 self-start mt-1 border border-gray-200 dark:border-slate-700" 
+                    />
                 )}
             </View>
         );
@@ -158,10 +178,8 @@ export default function AI() {
                 className="flex-1"
                 keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
             >
-                {isLoadingHistory ? (
-                    <View className="flex-1 items-center justify-center">
-                        <ActivityIndicator color="#FF6A00" />
-                    </View>
+                {isLoadingHistory || !summary ? (
+                    <SkeletonLoader type="list" />
                 ) : (
                     <FlatList
                         ref={flatListRef}

@@ -8,10 +8,18 @@ import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, paymentsAPI, type Transaction, type TransactionListResponse } from "../../services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { 
-    BadgeDollarSignIcon, Search, X, Filter, 
-    ArrowUpRight, ArrowDownLeft, ChevronDown 
+    BadgeDollarSignIcon, Search, X, PieChart, 
+    ArrowUpRight, ArrowDownLeft,
+    Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon,
+    Zap, HeartPulse, Plane, Gamepad2, GraduationCap,
+    Gift, TrendingUp, Wallet, MoreHorizontal, Trash2
 } from "lucide-react-native";
+import { Swipeable } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
+import BottomSheet from "@gorhom/bottom-sheet";
+import { useRef } from "react";
+import { BudgetSheet } from "../../components/BudgetSheet";
+import SkeletonLoader from "../../components/SkeletonLoader";
 
 // --- Helper: Grouping Logic ---
 const groupTransactions = (transactions: Transaction[]) => {
@@ -47,48 +55,74 @@ const groupTransactions = (transactions: Transaction[]) => {
     return months;
 };
 
+const CATEGORY_ICONS: Record<string, any> = {
+    Food: Utensils,
+    Coffee: Coffee,
+    Shopping: ShoppingCart,
+    Transport: Car,
+    Rent: HomeIcon,
+    Bills: Zap,
+    Health: HeartPulse,
+    Travel: Plane,
+    Fun: Gamepad2,
+    Education: GraduationCap,
+    Gifts: Gift,
+    Invest: TrendingUp,
+    Salary: Wallet,
+    Other: MoreHorizontal,
+};
+
 function TransactionItem({ item, onDelete, isExpired }: { item: Transaction; onDelete: (id: string) => void; isExpired: boolean }) {
     const isIncome = item.type === "INCOME";
-    return (
-        <TouchableOpacity
-            className="flex-row items-center py-4 px-4 bg-white dark:bg-slate-900 border-b border-gray-50 dark:border-slate-800"
-            activeOpacity={0.7}
-            onLongPress={() => {
-                if (isExpired) {
-                    Alert.alert("Trial Expired", "Upgrade to Pro to delete transactions.");
-                    return;
-                }
-                Alert.alert("Delete Transaction", `Are you sure you want to delete "${item.title}"?`, [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Delete", style: "destructive", onPress: () => onDelete(item.id) },
-                ]);
-            }}
+    const CategoryIcon = CATEGORY_ICONS[item.category || "Other"] || MoreHorizontal;
+    
+    const handleDelete = () => {
+        if (isExpired) {
+            Alert.alert("Trial Expired", "Upgrade to Pro to delete transactions.");
+            return;
+        }
+        Alert.alert("Delete Transaction", `Are you sure you want to delete "${item.title}"?`, [
+            { text: "Cancel", style: "cancel" },
+            { text: "Delete", style: "destructive", onPress: () => onDelete(item.id) },
+        ]);
+    };
+
+    const renderRightActions = () => (
+        <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={handleDelete}
+            className="bg-red-500 justify-center items-center w-[80px]"
         >
-            <View className={`w-11 h-11 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50" : "bg-red-50"}`}>
-                {isIncome ? (
-                    <ArrowDownLeft size={20} color="#10b981" strokeWidth={2.5} />
-                ) : (
-                    <ArrowUpRight size={20} color="#ef4444" strokeWidth={2.5} />
-                )}
-            </View>
-            <View className="flex-1">
-                <Text className="text-gray-900 dark:text-white font-geist-sb text-base" numberOfLines={1}>{item.title}</Text>
-                <Text className="text-gray-400 dark:text-gray-500 text-xs font-geist-md mt-0.5" numberOfLines={1}>
-                    {item.tags?.[0]?.name || "Other"}
-                </Text>
-            </View>
-            <View className="items-end">
-                <Text className={`font-geist-b text-[17px] ${isIncome ? "text-emerald-500" : "text-red-500"}`}>
-                    ₹{item.amount.toLocaleString("en-IN")}
-                </Text>
-            </View>
+            <Trash2 size={24} color="#FFF" />
         </TouchableOpacity>
+    );
+
+    return (
+        <Swipeable renderRightActions={renderRightActions} friction={2}>
+            <View className="flex-row items-center py-4 px-4 bg-white dark:bg-slate-900 border-b border-gray-50 dark:border-slate-800">
+                <View className={`w-11 h-11 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
+                    <CategoryIcon size={20} color={isIncome ? "#10b981" : "#ef4444"} strokeWidth={2.5} />
+                </View>
+                <View className="flex-1">
+                    <Text className="text-gray-900 dark:text-white font-geist-sb text-base" numberOfLines={1}>{item.title}</Text>
+                    <Text className="text-gray-400 dark:text-gray-500 text-xs font-geist-md mt-0.5" numberOfLines={1}>
+                        {item.category || "Other"}
+                    </Text>
+                </View>
+                <View className="items-end">
+                    <Text className={`font-geist-b text-[17px] ${isIncome ? "text-emerald-500" : "text-red-500"}`}>
+                        {isIncome ? "+" : "-"}₹{item.amount.toLocaleString("en-IN")}
+                    </Text>
+                </View>
+            </View>
+        </Swipeable>
     );
 }
 
 export default function Transactions() {
     const router = useRouter();
     const queryClient = useQueryClient();
+    const budgetSheetRef = useRef<BottomSheet>(null);
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const [filter, setFilter] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
@@ -127,6 +161,10 @@ export default function Transactions() {
 
     const isExpired = !!(!subscription?.isPro && subscription?.trialEndDate && new Date() > new Date(subscription.trialEndDate));
 
+    if (isLoading) {
+        return <SkeletonLoader type="list" />;
+    }
+
     return (
         <View className="flex-1 bg-[#F9FAFB] dark:bg-background-dark">
             {/* Header */}
@@ -141,8 +179,8 @@ export default function Transactions() {
                             <Search size={20} color={isDark ? "#94a3b8" : "#4B5563"} />
                         </TouchableOpacity>
                         <View className="w-[1px] h-4 bg-gray-200 dark:bg-slate-700 mr-3" />
-                        <TouchableOpacity>
-                            <Filter size={20} color={isDark ? "#94a3b8" : "#4B5563"} />
+                        <TouchableOpacity onPress={() => budgetSheetRef.current?.expand()}>
+                            <PieChart size={20} color={isDark ? "#94a3b8" : "#4B5563"} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -184,18 +222,13 @@ export default function Transactions() {
             </View>
 
             {/* List Content */}
-            {isLoading ? (
-                <View className="flex-1 items-center justify-center">
-                    <ActivityIndicator size="large" color="#FF6A00" />
-                </View>
-            ) : (
-                <ScrollView 
-                    className="flex-1"
-                    showsVerticalScrollIndicator={false}
-                    refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6A00" />}
-                >
-                    {groupedData && Object.entries(groupedData).map(([month, monthInfo]) => (
-                        <View key={month} className="mb-6">
+            <ScrollView 
+                className="flex-1"
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6A00" />}
+            >
+                {groupedData && Object.entries(groupedData).map(([month, monthInfo]) => (
+                    <View key={month} className="mb-6">
                             {/* Month Header */}
                             <View className="flex-row items-center justify-between px-6 mb-3">
                                 <Text className="text-gray-400 font-geist-b text-[13px] tracking-widest">{month}</Text>
@@ -203,7 +236,6 @@ export default function Transactions() {
                                     <Text className="text-gray-400 font-geist-b text-[13px] mr-1">
                                         ₹{Math.abs(monthInfo.total).toLocaleString("en-IN")}
                                     </Text>
-                                    <ChevronDown size={14} color="#9ca3af" />
                                 </View>
                             </View>
 
@@ -244,7 +276,8 @@ export default function Transactions() {
                     )}
                     <View style={{ height: 100 }} />
                 </ScrollView>
-            )}
+
+            <BudgetSheet ref={budgetSheetRef} onClose={() => budgetSheetRef.current?.close()} />
         </View>
     );
 }

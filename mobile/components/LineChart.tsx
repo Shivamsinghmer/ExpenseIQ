@@ -1,6 +1,6 @@
-import React from "react";
-import { View, Dimensions } from "react-native";
-import Svg, { Path, Circle, Line, Text as SvgText, G, LinearGradient, Stop, Defs } from "react-native-svg";
+import React, { useState } from "react";
+import { View, Dimensions, TouchableWithoutFeedback } from "react-native";
+import Svg, { Path, Circle, Line, Text as SvgText, G, LinearGradient, Stop, Defs, Rect } from "react-native-svg";
 
 interface Dataset {
     data: number[];
@@ -16,24 +16,20 @@ interface LineChartProps {
     unit?: string;
 }
 
-export function LineChart({ datasets, labels, height = 220, width = 300, isDark, unit = "₹" }: LineChartProps) {
-    // Reduced margins for better fit
-    const margin = { top: 10, right: 10, bottom: 30, left: 30 };
+export function LineChart({ datasets, labels, height = 220, width = 300, isDark, unit = "\u20B9" }: LineChartProps) {
+    const [selectedPoint, setSelectedPoint] = useState<{ x: number; y: number; value: number } | null>(null);
+
+    // Adjusted left margin: 36 optimized for spaced unicode tracking
+    const margin = { top: 25, right: 15, bottom: 30, left: 36 };
     const chartHeight = height - margin.top - margin.bottom;
     const chartWidth = width - margin.left - margin.right;
 
     // Calculate Max Value
     const allValues = datasets.flatMap((d) => d.data);
     const rawMaxValue = Math.max(...allValues, 0);
-    // Dynamic max value scaling
-    let maxValue = 100;
-    if (rawMaxValue > 0) {
-        const magnitude = Math.pow(10, Math.floor(Math.log10(rawMaxValue)));
-        maxValue = Math.ceil(rawMaxValue / magnitude) * magnitude;
-        if (maxValue < rawMaxValue * 1.1) {
-            maxValue += magnitude / 2;
-        }
-    }
+    
+    // True dynamic scaling (20% padding at the top)
+    const maxValue = rawMaxValue > 0 ? rawMaxValue * 1.2 : 100;
 
     const getY = (value: number) => {
         if (maxValue === 0) return chartHeight;
@@ -46,18 +42,19 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
     };
 
     const formatValue = (val: number) => {
-        if (val >= 1000) {
-            return `${(val / 1000).toFixed(1).replace(/\.0$/, "")}k`;
-        }
-        return val.toString();
+        if (val >= 10000000) return `${(val / 10000000).toFixed(1).replace(/\.0$/, "")}Cr`;
+        if (val >= 100000) return `${(val / 100000).toFixed(1).replace(/\.0$/, "")}L`;
+        if (val >= 1000) return `${(val / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+        return Math.round(val).toString();
     };
 
     const gridSteps = 4;
     const labelStep = Math.max(1, Math.ceil(labels.length / 5));
 
     return (
-        <View style={{ width, height }}>
-            <Svg width={width} height={height}>
+        <TouchableWithoutFeedback onPress={() => setSelectedPoint(null)}>
+            <View style={{ width, height }}>
+                <Svg width={width} height={height}>
                 <Defs>
                     {datasets.map((dataset, idx) => (
                         <LinearGradient key={`grad-${idx}`} id={`fill-${idx}`} x1="0" y1="0" x2="0" y2="1">
@@ -91,7 +88,7 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                                     textAnchor="end"
                                     fontWeight="400"
                                 >
-                                    {unit}{formatValue(val)}
+                                    {`${unit} ${formatValue(val)}`}
                                 </SvgText>
                             </G>
                         );
@@ -104,6 +101,7 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                         const points = dataset.data.map((val, i) => ({
                             x: getX(i),
                             y: getY(val),
+                            value: val,
                         }));
 
                         // Bezier curve or straight line? Let's stick to straight for accuracy, or simple curve.
@@ -128,21 +126,62 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
                                 />
-                                {/* Dots only on data points if not too many */}
                                 {points.length < 20 && points.map((p, i) => (
-                                    <Circle
-                                        key={`dot-${i}`}
-                                        cx={p.x}
-                                        cy={p.y}
-                                        r="3.5"
-                                        fill={isDark ? "#1e293b" : "#ffffff"}
-                                        stroke={dataset.color}
-                                        strokeWidth="2"
-                                    />
+                                    <G 
+                                        key={`dot-group-${i}`} 
+                                        onPress={() => setSelectedPoint({ x: p.x, y: p.y, value: p.value })}
+                                    >
+                                        {/* Colored Node */}
+                                        <Circle
+                                            cx={p.x}
+                                            cy={p.y}
+                                            r="3.5"
+                                            fill={selectedPoint?.x === p.x ? dataset.color : (isDark ? "#1e293b" : "#ffffff")}
+                                            stroke={dataset.color}
+                                            strokeWidth="2.5"
+                                        />
+                                        {/* Invisible Interactive Hit-Box (fat finger padding) */}
+                                        <Circle
+                                            cx={p.x}
+                                            cy={p.y}
+                                            r="22"
+                                            fill="transparent"
+                                        />
+                                    </G>
                                 ))}
                             </G>
                         );
                     })}
+
+                    {/* Tooltip Overlay */}
+                    {selectedPoint && (
+                        <G x={selectedPoint.x} y={selectedPoint.y - 30}>
+                            {/* Card Body */}
+                            <Rect
+                                x={-42}
+                                y={-12}
+                                width={84}
+                                height={26}
+                                rx={13}
+                                fill={isDark ? "#334155" : "#1e293b"}
+                            />
+                            {/* Connective Arrow */}
+                            <Path
+                                d="M -6 13 L 0 19 L 6 13 Z"
+                                fill={isDark ? "#334155" : "#1e293b"}
+                            />
+                            <SvgText
+                                x={0}
+                                y={4}
+                                fill={isDark ? "#f8fafc" : "#ffffff"}
+                                fontSize="12"
+                                fontWeight="700"
+                                textAnchor="middle"
+                            >
+                                {`${unit} ${selectedPoint.value.toLocaleString("en-IN")}`}
+                            </SvgText>
+                        </G>
+                    )}
 
                     {/* X Axis Labels */}
                     {labels.map((label, index) => {
@@ -158,7 +197,7 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                                 y={chartHeight + 25}
                                 fontSize="10"
                                 fill={isDark ? "#94a3b8" : "#64748b"}
-                                textAnchor="middle"
+                                textAnchor={isFirst ? "start" : (isLast ? "end" : "middle")}
                                 fontWeight="500"
                             >
                                 {label}
@@ -167,6 +206,7 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                     })}
                 </G>
             </Svg>
-        </View>
+            </View>
+        </TouchableWithoutFeedback>
     );
 }

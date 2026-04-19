@@ -5,21 +5,46 @@ import {
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
-import { transactionsAPI, type SummaryResponse } from "../../services/api";
+import { transactionsAPI, budgetsAPI, type SummaryResponse } from "../../services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { 
     Sparkles, ChevronRight, TrendingUp, 
     TrendingDown, IndianRupee, PieChart as PieIcon,
-    Flame, Zap
+    CalendarDays, 
+    MessageSquare,
+    Filter,
+    AlertCircle,
+    Flame
 } from "lucide-react-native";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import { LineChart } from "../../components/LineChart";
 import Svg, { G, Path, Circle, Text as SvgText } from "react-native-svg";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
+const CATEGORY_COLORS: Record<string, string> = {
+    Food: "#FF6B6B",
+    Coffee: "#964B00",
+    Shopping: "#4DABF7",
+    Transport: "#51CF66",
+    Rent: "#FCC419",
+    Bills: "#FFD43B",
+    Health: "#FF8787",
+    Travel: "#339AF0",
+    Fun: "#9775FA",
+    Education: "#748FFC",
+    Gifts: "#F06595",
+    Invest: "#63E6BE",
+    Salary: "#37B24D",
+    Other: "#ADB5BD",
+};
+
+const getCategoryColor = (name: string) => CATEGORY_COLORS[name] || CATEGORY_COLORS.Other;
+
 // --- Simple Donut Chart Component ---
-const DonutChart = ({ data, size = 180, strokeWidth = 25, total }: { data: any[], size?: number, strokeWidth?: number, total: number }) => {
-    const radius = (size - strokeWidth) / 2;
+const DonutChart = ({ data, size = 220, strokeWidth = 25, total, selectedCategory, onSelect }: { data: any[], size?: number, strokeWidth?: number, total: number, selectedCategory: string | null, onSelect: (cat: string) => void }) => {
+    // Subtract extra margin (10) so the outer strokes don't clip against the Svg bounding box when selected
+    const radius = (size - strokeWidth - 10) / 2;
     const center = size / 2;
     const circumference = 2 * Math.PI * radius;
     let currentOffset = 0;
@@ -34,6 +59,7 @@ const DonutChart = ({ data, size = 180, strokeWidth = 25, total }: { data: any[]
                         const strokeDashoffset = circumference - (circumference * percentage) / 100;
                         const rotate = (currentOffset / total) * 360;
                         currentOffset += item.totalSpent;
+                        const isSelected = selectedCategory === item.name;
 
                         return (
                             <Circle
@@ -41,12 +67,14 @@ const DonutChart = ({ data, size = 180, strokeWidth = 25, total }: { data: any[]
                                 cx={center}
                                 cy={center}
                                 r={radius}
-                                stroke={item.color || "#CBD5E1"}
-                                strokeWidth={strokeWidth}
-                                strokeDasharray={strokeDasharray}
+                                stroke={getCategoryColor(item.name)}
+                                strokeWidth={isSelected ? strokeWidth + 4 : strokeWidth}
+                                strokeDasharray={strokeDasharray - (isSelected ? 0 : 2)} // small gap for unselected
                                 strokeDashoffset={strokeDashoffset}
                                 transform={`rotate(${rotate}, ${center}, ${center})`}
                                 fill="transparent"
+                                onPress={() => onSelect(item.name)}
+                                opacity={selectedCategory ? (isSelected ? 1 : 0.4) : 1}
                             />
                         );
                     })}
@@ -56,7 +84,7 @@ const DonutChart = ({ data, size = 180, strokeWidth = 25, total }: { data: any[]
                 <View className="w-6 h-6 items-center justify-center mb-1">
                     <PieIcon size={14} color="#94a3b8" />
                 </View>
-                <Text className="text-gray-900 font-geist-b text-lg">₹{total.toLocaleString()}</Text>
+                <Text className="text-gray-900 dark:text-white font-geist-b text-lg">₹{total.toLocaleString()}</Text>
                 <Text className="text-gray-400 font-geist-md text-[10px] uppercase">Total Spent</Text>
             </View>
         </View>
@@ -67,6 +95,7 @@ export default function Analytics() {
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const [timeRange, setTimeRange] = useState("month");
+    const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
 
     // Fetch Summary Data
     const { data: summary, isLoading } = useQuery<SummaryResponse>({
@@ -77,27 +106,62 @@ export default function Analytics() {
         },
     });
 
-    const aiInsights = [
-        { id: 1, text: "You're more careful with spending on weekends", icon: Sparkles },
-        { id: 2, text: "Medical is the top expense category", icon: Flame },
-    ];
+    const { data: allTransactionsData } = useQuery({
+        queryKey: ["allTxnsForAnalytics", timeRange],
+        queryFn: async () => {
+            const res = await transactionsAPI.getAll({ limit: "150" });
+            return res.data;
+        }
+    });
+
+    const { data: budgetsData } = useQuery({
+        queryKey: ["budgets"],
+        queryFn: async () => {
+            const res = await budgetsAPI.getAll();
+            return res.data;
+        }
+    });
+
+    // Generate Dynamic AI Insights
+    const aiInsights: { id: number, text: string, icon: any }[] = [];
+    if (summary) {
+        if (summary.totalExpense > summary.totalIncome && summary.totalIncome > 0) {
+            aiInsights.push({ id: 1, text: "You are spending more than your income this period.", icon: AlertCircle });
+        }
+        if (summary.categoryBreakdown && summary.categoryBreakdown.length > 0) {
+            aiInsights.push({ id: 2, text: `${summary.categoryBreakdown[0].name} is your highest expense category.`, icon: Flame });
+        }
+        if (summary.incomeCount === 0 && summary.expenseCount > 0) {
+            aiInsights.push({ id: 3, text: "You haven't recorded any income this period.", icon: Sparkles });
+        }
+        if (aiInsights.length < 2) {
+            aiInsights.push({ id: 4, text: "Your spending seems well balanced so far.", icon: TrendingUp });
+        }
+    }
 
     if (isLoading) {
-        return (
-            <View className="flex-1 items-center justify-center bg-white">
-                <ActivityIndicator size="large" color="#FF6A00" />
-            </View>
-        );
+        return <SkeletonLoader type="analytics" />;
     }
 
     const labels = summary?.chartData?.map(d => new Date(d.date).toLocaleDateString("en-IN", { month: "short" })) || ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
     const chartData = summary?.chartData?.map(d => d.expense) || [5000, 4500, 6000, 5200, 21000, 12000];
 
-    const hasData = summary && summary.tagBreakdown && summary.tagBreakdown.length > 0;
-    const topCategory = hasData ? summary.tagBreakdown[0] : null;
-    const budget = 3000;
-    const remaining = topCategory ? Math.max(0, budget - topCategory.totalSpent) : budget;
-    const budgetPercentage = topCategory ? Math.min(100, Math.floor((topCategory.totalSpent / budget) * 100)) : 0;
+    const hasData = summary && summary.categoryBreakdown && summary.categoryBreakdown.length > 0;
+    const topCategory = hasData 
+        ? (selectedCategoryName 
+            ? summary.categoryBreakdown.find(c => c.name === selectedCategoryName) || summary.categoryBreakdown[0]
+            : summary.categoryBreakdown[0])
+        : null;
+
+    const budgetObj = budgetsData?.find(b => b.category === topCategory?.name);
+    const budget = budgetObj ? budgetObj.amount : 0;
+    const remaining = topCategory && budget > 0 ? Math.max(0, budget - topCategory.totalSpent) : 0;
+    const budgetPercentage = topCategory && budget > 0 ? Math.min(100, Math.floor((topCategory.totalSpent / budget) * 100)) : 0;
+    
+    // Filter transactions for specific category
+    const categoryTransactions = topCategory && allTransactionsData 
+        ? allTransactionsData.transactions.filter(t => t.category === topCategory.name)
+        : [];
 
     return (
         <ScrollView 
@@ -115,16 +179,25 @@ export default function Analytics() {
                         <Text className="text-gray-900 dark:text-white text-[20px] font-geist-b ml-2">AI Insights</Text>
                     </View>
                     
-                    {aiInsights.map((insight) => (
-                        <View key={insight.id} className="bg-white dark:bg-slate-900 rounded-3xl p-4 mb-2 shadow-sm border border-gray-50 dark:border-slate-800 flex-row items-center">
-                            <View className="w-10 h-10 items-center justify-center mr-4">
-                                <insight.icon size={20} color="#FF6A00" />
-                            </View>
-                            <Text className="flex-1 text-gray-800 dark:text-gray-200 font-geist-md text-sm leading-5">
-                                {insight.text}
+                    {!hasData ? (
+                        <View className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-slate-800 border-dashed items-center justify-center">
+                            <Sparkles size={24} color="#d1d5db" style={{ marginBottom: 8 }} />
+                            <Text className="text-gray-400 font-geist-md text-sm text-center">
+                                Add a transaction to continue
                             </Text>
                         </View>
-                    ))}
+                    ) : (
+                        aiInsights.map((insight) => (
+                            <View key={insight.id} className="bg-white dark:bg-slate-900 rounded-3xl p-4 mb-2 shadow-sm border border-gray-50 dark:border-slate-800 flex-row items-center">
+                                <View className="w-10 h-10 items-center justify-center mr-4">
+                                    <insight.icon size={20} color="#FF6A00" />
+                                </View>
+                                <Text className="flex-1 text-gray-800 dark:text-gray-200 font-geist-md text-sm leading-5">
+                                    {insight.text}
+                                </Text>
+                            </View>
+                        ))
+                    )}
                 </View>
 
                 {/* Filter Controls */}
@@ -169,10 +242,12 @@ export default function Analytics() {
                         <View className="mb-8">
                             <Text className="text-gray-900 dark:text-white text-[20px] font-geist-b mb-6">Spending by Category</Text>
                             
-                            <View className="items-center mb-8">
+                            <View className="items-center mb-8 mt-4">
                                 <DonutChart 
-                                    data={summary?.tagBreakdown || []} 
-                                    total={summary?.totalExpense || 0} 
+                                    data={summary?.categoryBreakdown || []} 
+                                    total={summary?.totalExpense || 0}
+                                    selectedCategory={selectedCategoryName}
+                                    onSelect={(cat) => setSelectedCategoryName(cat === selectedCategoryName ? null : cat)}
                                 />
                             </View>
 
@@ -182,16 +257,13 @@ export default function Analytics() {
                                     <View className="flex-row items-center justify-between mb-6">
                                         <View className="flex-row items-center">
                                             <View className="w-10 h-10 rounded-xl bg-blue-50 items-center justify-center mr-3">
-                                                <PieIcon size={20} color={topCategory.color} />
+                                                <PieIcon size={20} color={getCategoryColor(topCategory.name)} />
                                             </View>
                                             <View>
                                                 <Text className="text-gray-900 dark:text-white font-geist-b text-base">{topCategory.name}</Text>
                                                 <Text className="text-gray-400 text-xs">{topCategory.count} transactions</Text>
                                             </View>
                                         </View>
-                                        <TouchableOpacity className="w-8 h-8 rounded-full bg-gray-50 items-center justify-center">
-                                            <ChevronRight size={18} color="#9ca3af" />
-                                        </TouchableOpacity>
                                     </View>
 
                                     {/* Stats Row */}
@@ -211,56 +283,52 @@ export default function Analytics() {
                                     </View>
 
                                     {/* Budget Progress */}
-                                    <View className="mb-6">
-                                        <View className="flex-row justify-between mb-2">
-                                            <Text className="text-emerald-500 font-geist-sb text-xs">₹{remaining.toLocaleString()} remaining</Text>
-                                            <Text className="text-gray-400 font-geist-sb text-xs">{budgetPercentage}%</Text>
+                                    {budget > 0 && (
+                                        <View className="mb-6">
+                                            <View className="flex-row justify-between mb-2">
+                                                <Text className="text-emerald-500 font-geist-sb text-xs">₹{remaining.toLocaleString()} remaining</Text>
+                                                <Text className="text-gray-400 font-geist-sb text-xs">{budgetPercentage}%</Text>
+                                            </View>
+                                            <View className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                <View 
+                                                    className="h-full bg-emerald-500 rounded-full" 
+                                                    style={{ width: `${budgetPercentage}%`, backgroundColor: budgetPercentage > 80 ? '#ef4444' : '#10b981' }} 
+                                                />
+                                            </View>
                                         </View>
-                                        <View className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                            <View 
-                                                className="h-full bg-emerald-500 rounded-full" 
-                                                style={{ width: `${budgetPercentage}%` }} 
-                                            />
-                                        </View>
-                                    </View>
+                                    )}
 
-                                    {/* Top Merchants */}
-                                    <View className="mb-6">
-                                        <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-4">Top Merchants</Text>
-                                        <View className="gap-y-3">
-                                            {[
-                                                { name: "Licious", amount: 1483, count: 3 },
-                                                { name: "Blinkit", amount: 943, count: 3 },
-                                                { name: "Needs Market", amount: 100, count: 2 },
-                                            ].map((m, i) => (
-                                                <View key={i} className="flex-row justify-between items-center">
-                                                    <Text className="text-gray-900 dark:text-white font-geist-sb text-sm">{m.name}</Text>
-                                                    <View className="flex-row items-center">
-                                                        <Text className="text-gray-900 dark:text-white font-geist-b text-sm">₹{m.amount.toLocaleString()}</Text>
-                                                        <Text className="text-gray-400 text-[10px] ml-1">({m.count}x)</Text>
-                                                    </View>
-                                                </View>
-                                            ))}
-                                        </View>
-                                    </View>
-
-                                    {/* Recent Transactions */}
+                                    {/* Recent Transactions for this Category */}
                                     <View>
-                                        <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-4">Recent Transactions</Text>
-                                        <View className="gap-y-4">
-                                            {[
-                                                { name: "Licious", amount: 349, date: "17 Mar 2026", method: "UPI" },
-                                                { name: "Blinkit", amount: 190, date: "16 Mar 2026", method: "UPI" },
-                                            ].map((t, i) => (
-                                                <View key={i} className="flex-row justify-between items-center">
-                                                    <View>
-                                                        <Text className="text-gray-900 dark:text-white font-geist-sb text-sm">{t.name}</Text>
-                                                        <Text className="text-gray-400 text-[10px]">{t.date}  •  {t.method}</Text>
-                                                    </View>
-                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-sm">₹{t.amount.toLocaleString()}</Text>
-                                                </View>
-                                            ))}
-                                        </View>
+                                        <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-4">Recent {topCategory.name} Transactions</Text>
+                                        {categoryTransactions.length > 0 ? (
+                                            <View className="gap-y-4">
+                                                {categoryTransactions.slice(0, 4).map((t, i) => {
+                                                    const dateStr = new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+                                                    // Extract location from notes if it starts with "At "
+                                                    let location = "Unknown Location";
+                                                    if (t.notes && t.notes.startsWith("At ")) {
+                                                        location = t.notes.substring(3).trim();
+                                                    }
+
+                                                    return (
+                                                        <View key={t.id || i} className="flex-row justify-between items-center">
+                                                            <View className="flex-1 mr-4">
+                                                                <Text className="text-gray-900 dark:text-white font-geist-sb text-sm" numberOfLines={1}>{t.title}</Text>
+                                                                <Text className="text-gray-400 text-[10px] mt-0.5" numberOfLines={1}>
+                                                                    {dateStr}  •  {location}
+                                                                </Text>
+                                                            </View>
+                                                            <Text className="text-red-500 font-geist-b text-sm">
+                                                                -₹{t.amount.toLocaleString("en-IN")}
+                                                            </Text>
+                                                        </View>
+                                                    );
+                                                })}
+                                            </View>
+                                        ) : (
+                                            <Text className="text-gray-400 text-xs italic">No recent transactions found.</Text>
+                                        )}
                                     </View>
                                 </View>
                             )}

@@ -25,6 +25,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { emisAPI, transactionsAPI } from "../services/api";
 import AddEMISheet, { AddEMISheetRef } from "../components/AddEMISheet";
+import SkeletonLoader from "../components/SkeletonLoader";
 
 export default function EMITracker() {
     const router = useRouter();
@@ -66,11 +67,7 @@ export default function EMITracker() {
     };
 
     if (emisLoading) {
-        return (
-            <View className="flex-1 bg-white items-center justify-center">
-                <ActivityIndicator color="#FF6A00" size="large" />
-            </View>
-        );
+        return <SkeletonLoader type="list" />;
     }
 
     return (

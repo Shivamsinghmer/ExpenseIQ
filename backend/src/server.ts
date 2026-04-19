@@ -3,13 +3,13 @@ import express from "express";
 import cors from "cors";
 import os from "os";
 import transactionRoutes from "./routes/transactions";
-import tagRoutes from "./routes/tags";
 import aiRoutes from "./routes/ai";
 import paymentRoutes from "./routes/payments";
 import userRoutes from "./routes/users";
 import emiRoutes from "./routes/emis";
 import envelopeRoutes from "./routes/envelopes";
 import streakRoutes from "./routes/streaks";
+import budgetRoutes from "./routes/budgets";
 
 console.log("--- Environment Verification ---");
 console.log("Server restarting...");
@@ -43,13 +43,13 @@ app.get("/health", (_req, res) => {
 
 // API Routes
 app.use("/api/transactions", transactionRoutes);
-app.use("/api/tags", tagRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/emis", emiRoutes);
 app.use("/api/envelopes", envelopeRoutes);
 app.use("/api/streaks", streakRoutes);
+app.use("/api/budgets", budgetRoutes);
 
 // 404 handler
 app.use((_req, res) => {

@@ -5,12 +5,13 @@ import {
     ScrollView,
     TouchableOpacity,
     RefreshControl,
-    ActivityIndicator,
     Alert,
     Platform,
     Dimensions,
     Image,
+    ActivityIndicator,
 } from "react-native";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import { LineChart } from "../../components/LineChart";
 import Svg, { Path } from "react-native-svg";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,38 +21,51 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { transactionsAPI, paymentsAPI, streaksAPI, type SummaryResponse, type Transaction } from "../../services/api";
 import {
-    ArrowDown, ArrowUp, File, TrendingUp, TrendingDown,
-    Crown, AlertCircle, Clock, MessageSquare, Sparkles,
-    Landmark, Wallet, ChevronRight, List, Flame, RefreshCw, Map
+    Landmark, Wallet, ChevronRight, List, Flame, RefreshCw, Map,
+    ArrowDown, ArrowUp, File, Crown, AlertCircle, Clock, MessageSquare, Sparkles,
+    Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon,
+    Zap, HeartPulse, Plane, Gamepad2, GraduationCap,
+    Gift, TrendingUp, Wallet as WalletIcon, MoreHorizontal, Edit2
 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 
+const CATEGORY_ICONS: Record<string, any> = {
+    Food: Utensils,
+    Coffee: Coffee,
+    Shopping: ShoppingCart,
+    Transport: Car,
+    Rent: HomeIcon,
+    Bills: Zap,
+    Health: HeartPulse,
+    Travel: Plane,
+    Fun: Gamepad2,
+    Education: GraduationCap,
+    Gifts: Gift,
+    Invest: TrendingUp,
+    Salary: WalletIcon,
+    Other: MoreHorizontal,
+};
+
 function TransactionItem({ item }: { item: Transaction }) {
     const isIncome = item.type === "INCOME";
+    const CategoryIcon = CATEGORY_ICONS[item.category || "Other"] || MoreHorizontal;
+
     return (
-        <View className="bg-white rounded-2xl p-4 mb-3 flex-row items-center border border-gray-100 shadow-sm">
+        <View className="bg-white dark:bg-slate-900 rounded-2xl p-4 mb-3 flex-row items-center border border-gray-100 dark:border-slate-800 shadow-sm">
             <View
-                className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50" : "bg-red-50"}`}
+                className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}
             >
-                {isIncome ? (
-                    <TrendingUp size={20} color="#10b981" />
-                ) : (
-                    <TrendingDown size={20} color="#ef4444" />
-                )}
+                <CategoryIcon size={20} color={isIncome ? "#10b981" : "#ef4444"} strokeWidth={2.5} />
             </View>
             <View className="flex-1">
-                <Text className="text-gray-900 font-geist-sb text-base">{item.title}</Text>
-                <Text className="text-gray-400 text-xs font-geist-md mt-0.5">
-                    {new Date(item.date).toLocaleDateString("en-IN", {
-                        month: "short",
-                        day: "numeric",
-                    })}
-                    {item.tags.length > 0 && ` • ${item.tags.map((t) => t.name).join(", ")}`}
+                <Text className="text-gray-900 dark:text-white font-geist-sb text-base">{item.title}</Text>
+                <Text className="text-gray-400 dark:text-gray-500 text-xs font-geist-md mt-0.5">
+                    {item.category || "Other"}
                 </Text>
             </View>
             <Text className={`font-geist-b text-base ${isIncome ? "text-emerald-600" : "text-red-500"}`}>
-                {isIncome ? "+" : "-"}₹{item.amount.toFixed(2)}
+                {isIncome ? "+" : "-"}₹{item.amount.toLocaleString("en-IN")}
             </Text>
         </View>
     );
@@ -77,7 +91,7 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
                 ${t.type === "INCOME" ? "+" : "-"} &#8377; ${t.amount.toFixed(2)}
             </td>
             <td>${t.type}</td>
-            <td>${escapeHtml(t.tags.map((tag) => tag.name).join(", ")) || "-"}</td>
+            <td>${escapeHtml(t.category || "-")}</td>
             <td>${escapeHtml(t.notes || "-")}</td>
         </tr>`
         )
@@ -135,7 +149,7 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
                     <th>Title</th>
                     <th>Amount</th>
                     <th>Type</th>
-                    <th>Tags</th>
+                    <th>Category</th>
                     <th>Notes</th>
                 </tr>
             </thead>
@@ -150,6 +164,10 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
 
 import { useSheet } from "../../providers/sheet-provider";
 import * as ImagePicker from 'expo-image-picker';
+import BottomSheet from "@gorhom/bottom-sheet";
+import { useRef } from "react";
+import { BudgetSheet } from "../../components/BudgetSheet";
+import { budgetsAPI } from "../../services/api";
 
 export default function Dashboard() {
     const { signOut } = useAuth();
@@ -160,6 +178,15 @@ export default function Dashboard() {
     const [catTab, setCatTab] = useState<"current" | "prev">("current");
     const queryClient = useQueryClient();
     const { openSheet } = useSheet();
+    const budgetSheetRef = useRef<BottomSheet>(null);
+
+    const { data: budgetsData } = useQuery({
+        queryKey: ["budgets"],
+        queryFn: async () => {
+            const res = await budgetsAPI.getAll();
+            return res.data;
+        }
+    });
 
     const handleScanAndRecord = async () => {
         const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
@@ -204,7 +231,7 @@ export default function Dashboard() {
 
     const {
         data: summary,
-        isLoading,
+        isLoading: isLoadingSummary,
         refetch,
         isRefetching,
     } = useQuery<SummaryResponse>({
@@ -229,6 +256,7 @@ export default function Dashboard() {
 
     const {
         data: streakStats,
+        isLoading: isLoadingStreak,
         refetch: refetchStreak,
     } = useQuery({
         queryKey: ["streak"],
@@ -290,13 +318,8 @@ export default function Dashboard() {
         }
     };
 
-    if (isLoading) {
-        return (
-            <View className="flex-1 items-center justify-center bg-[#F5F5F5]">
-                <ActivityIndicator size="large" color="#FF6A00" />
-                <Text className="text-gray-400 mt-4 font-geist-md">Loading your finances...</Text>
-            </View>
-        );
+    if (isLoadingSummary || isLoadingStreak) {
+        return <SkeletonLoader type="dashboard" />;
     }
 
     const handleProPress = () => {
@@ -323,9 +346,9 @@ export default function Dashboard() {
     const today = new Date();
     const dateStr = today.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
     const totalExpense = summary?.totalExpense || 0;
-    const budget = 20000; // Default budget – can be updated later
+    const budget = budgetsData?.reduce((acc, curr) => acc + curr.amount, 0) || 0;
     const remaining = Math.max(budget - totalExpense, 0);
-    const spendPercent = Math.min((totalExpense / budget) * 100, 100);
+    const spendPercent = budget > 0 ? Math.min((totalExpense / budget) * 100, 100) : 0;
     const expenseCount = summary?.expenseCount || 0;
     const avgPerDay = expenseCount > 0 ? Math.round(totalExpense / 30) : 0;
 
@@ -336,13 +359,14 @@ export default function Dashboard() {
     const prevMonthName = prevMonth.toLocaleDateString("en-IN", { month: "short" });
 
     return (
-        <ScrollView
-            className="flex-1 bg-[#F5F5F5]"
-            contentContainerStyle={{ paddingBottom: 140 }}
-            refreshControl={
-                <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor="#FF6A00" />
-            }
-        >
+        <View className="flex-1">
+            <ScrollView
+                className="flex-1 bg-[#F5F5F5]"
+                contentContainerStyle={{ paddingBottom: 140 }}
+                refreshControl={
+                    <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor="#FF6A00" />
+                }
+            >
             {/* Trial/Pro Status Banner */}
             {showTrialBanner && (
                 <View
@@ -411,33 +435,58 @@ export default function Dashboard() {
 
             {/* ─── Total Monthly Spend Card ─── */}
             <View className="px-5 mb-4">
-                <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                    <Text className="text-gray-500 text-center text-sm font-geist-md mb-2">Total Monthly Spend</Text>
+                <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 relative">
+                    <Text className="text-gray-500 text-center text-sm font-geist-md mb-2 mt-1">Total Monthly Spend</Text>
+                    <TouchableOpacity 
+                        onPress={() => budgetSheetRef.current?.expand()} 
+                        className="absolute right-4 top-4 w-8 h-8 rounded-full bg-gray-50 items-center justify-center"
+                    >
+                        <Edit2 size={14} color="#FF6A00" />
+                    </TouchableOpacity>
+                    
                     <Text className="text-[#FF6A00] text-center text-4xl font-geist-b mb-4">
                         ₹{totalExpense.toLocaleString("en-IN")}
                     </Text>
 
-                    {/* Progress Bar */}
-                    <View className="h-3 bg-gray-100 rounded-full overflow-hidden mb-3">
-                        <View
-                            className="h-full rounded-full"
-                            style={{
-                                width: `${spendPercent}%`,
-                                backgroundColor: spendPercent > 80 ? '#ef4444' : '#22c55e',
-                            }}
-                        />
-                    </View>
+                    {budget === 0 && (
+                        <TouchableOpacity 
+                            onPress={() => budgetSheetRef.current?.expand()} 
+                            className="bg-orange-50 py-3 rounded-[14px] border border-orange-100 flex-row items-center justify-center mb-3"
+                        >
+                            <Edit2 size={16} color="#FF6A00" className="mr-4" />
+                            <Text className="text-[#FF6A00] font-geist-sb text-sm">Add a Budget first</Text>
+                        </TouchableOpacity>
+                    )}
 
-                    <View className="flex-row justify-between">
-                        <View>
-                            <Text className="text-gray-400 text-xs font-geist-md">Remaining</Text>
-                            <Text className="text-emerald-600 text-lg font-geist-b">₹{remaining.toLocaleString("en-IN")}</Text>
+                    {/* Progress Bar & Details */}
+                    {expenseCount > 0 ? (
+                        <>
+                            <View className="h-3 bg-gray-100 rounded-full overflow-hidden mb-3">
+                                <View
+                                    className="h-full rounded-full"
+                                    style={{
+                                        width: `${spendPercent}%`,
+                                        backgroundColor: spendPercent > 80 ? '#ef4444' : '#22c55e',
+                                    }}
+                                />
+                            </View>
+
+                            <View className="flex-row justify-between">
+                                <View>
+                                    <Text className="text-gray-400 text-xs font-geist-md">Remaining</Text>
+                                    <Text className="text-emerald-600 text-lg font-geist-b">₹{remaining.toLocaleString("en-IN")}</Text>
+                                </View>
+                                <View className="items-end">
+                                    <Text className="text-gray-400 text-xs font-geist-md">Budget</Text>
+                                    <Text className="text-gray-800 text-lg font-geist-b">₹{budget.toLocaleString("en-IN")}</Text>
+                                </View>
+                            </View>
+                        </>
+                    ) : (
+                        <View className="py-4 items-center justify-center border-t border-gray-50 mt-2">
+                            <Text className="text-gray-400 font-geist-md text-sm">Add a transaction to continue</Text>
                         </View>
-                        <View className="items-end">
-                            <Text className="text-gray-400 text-xs font-geist-md">Budget</Text>
-                            <Text className="text-gray-800 text-lg font-geist-b">₹{budget.toLocaleString("en-IN")}</Text>
-                        </View>
-                    </View>
+                    )}
                 </View>
             </View>
 
@@ -571,12 +620,12 @@ export default function Dashboard() {
                         insights.push({ emoji: "🧾", text: `Average transaction: ₹${avgTxn.toLocaleString("en-IN")} across ${expenseCount} expenses.` });
                     }
 
-                    if (summary?.tagBreakdown && summary.tagBreakdown.length > 0) {
-                        const topTag = summary.tagBreakdown[0];
-                        insights.push({ emoji: "🏷️", text: `Top category: ${topTag.name} with ₹${topTag.totalSpent.toLocaleString("en-IN")} spent.` });
+                    if (summary?.categoryBreakdown && summary.categoryBreakdown.length > 0) {
+                        const topCat = summary.categoryBreakdown[0];
+                        insights.push({ emoji: "🏷️", text: `Top category: ${topCat.name} with ₹${topCat.totalSpent.toLocaleString("en-IN")} spent.` });
                     }
 
-                    if (remaining > 0 && budget > 0) {
+                    if (expenseCount > 0 && remaining > 0 && budget > 0) {
                         const daysLeft = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate();
                         if (daysLeft > 0) {
                             const dailyBudget = Math.round(remaining / daysLeft);
@@ -585,7 +634,7 @@ export default function Dashboard() {
                     }
 
                     if (insights.length === 0) {
-                        insights.push({ emoji: "✨", text: "Start tracking expenses to get personalized insights!" });
+                        insights.push({ emoji: "✨", text: "Add a transaction to continue and see smart AI insights!" });
                     }
 
                     return insights.slice(0, 3).map((insight, i) => (
@@ -596,45 +645,6 @@ export default function Dashboard() {
                     ));
                 })()}
             </View>
-
-            {/* ─── Spending by Category ─── */}
-            {summary?.tagBreakdown && summary.tagBreakdown.length > 0 && (
-                <View className="px-5 mb-6">
-                    <Text className="text-gray-900 text-xl font-geist-b mb-4">Spending by Category</Text>
-
-                    {/* Month Tabs */}
-                    <View className="flex-row gap-2 mb-4">
-                        <TouchableOpacity
-                            onPress={() => setCatTab("current")}
-                            className={`px-5 py-2 rounded-full ${catTab === "current" ? "bg-[#FF6A00]" : "bg-white border border-gray-200"}`}
-                        >
-                            <Text className={`text-sm font-geist-sb ${catTab === "current" ? "text-white" : "text-gray-500"}`}>
-                                This Month
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => setCatTab("prev")}
-                            className={`px-5 py-2 rounded-full ${catTab === "prev" ? "bg-[#FF6A00]" : "bg-white border border-gray-200"}`}
-                        >
-                            <Text className={`text-sm font-geist-sb ${catTab === "prev" ? "text-white" : "text-gray-500"}`}>
-                                {prevMonthName}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Category Items */}
-                    {summary.tagBreakdown.map((tag) => (
-                        <View key={tag.id} className="bg-white rounded-2xl p-4 mb-3 flex-row items-center border border-gray-100 shadow-sm">
-                            <View className="w-4 h-4 rounded-full mr-3" style={{ backgroundColor: tag.color }} />
-                            <View className="flex-1">
-                                <Text className="text-gray-900 text-sm font-geist-sb">{tag.name}</Text>
-                                <Text className="text-gray-400 text-xs font-geist-md">{tag.count} transactions</Text>
-                            </View>
-                            <Text className="text-gray-900 text-base font-geist-b">₹{tag.totalSpent.toLocaleString("en-IN")}</Text>
-                        </View>
-                    ))}
-                </View>
-            )}
 
 
             {/* ─── Recent Transactions ─── */}
@@ -659,6 +669,8 @@ export default function Dashboard() {
                     </View>
                 )}
             </View>
-        </ScrollView>
+            </ScrollView>
+            <BudgetSheet ref={budgetSheetRef} onClose={() => budgetSheetRef.current?.close()} />
+        </View>
     );
 }

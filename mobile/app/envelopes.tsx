@@ -21,6 +21,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { envelopesAPI } from "../services/api";
 import AddEnvelopeSheet, { AddEnvelopeSheetRef } from "../components/AddEnvelopeSheet";
+import SkeletonLoader from "../components/SkeletonLoader";
 
 export default function BudgetEnvelopes() {
     const router = useRouter();
@@ -43,11 +44,7 @@ export default function BudgetEnvelopes() {
     };
 
     if (isLoading) {
-        return (
-            <View className="flex-1 bg-white items-center justify-center">
-                <ActivityIndicator color="#FF6A00" size="large" />
-            </View>
-        );
+        return <SkeletonLoader type="list" />;
     }
 
     return (

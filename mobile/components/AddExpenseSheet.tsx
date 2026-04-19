@@ -19,9 +19,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import {
     transactionsAPI,
-    tagsAPI,
     paymentsAPI,
-    type Tag,
+    budgetsAPI,
     type CreateTransactionData,
 } from "../services/api";
 import {
@@ -71,7 +70,6 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         const [amount, setAmount] = useState("");
         const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
         const [notes, setNotes] = useState("");
-        const [selectedTags, setSelectedTags] = useState<string[]>([]);
         const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
         const [location, setLocation] = useState<string | null>(null);
         const [isSplit, setIsSplit] = useState(false);
@@ -82,20 +80,33 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         useEffect(() => {
             if (initialData) {
                 if (initialData.image) setScannedImage(initialData.image);
-                if (initialData.title) setQuickAddText(initialData.title);
+                if (initialData.title) {
+                    setQuickAddText(initialData.title);
+                    // Attempt to auto-categorize from initial title
+                    const matched = QUICK_CATEGORIES.find(c => 
+                        initialData.title?.toLowerCase().includes(c.name.toLowerCase())
+                    );
+                    if (matched) setSelectedCategory(matched.name);
+                }
                 if (initialData.amount) setAmount(initialData.amount);
             } else {
                 setScannedImage(null);
             }
         }, [initialData]);
 
-        const { data: tags } = useQuery<Tag[]>({
-            queryKey: ["tags"],
-            queryFn: async () => {
-                const res = await tagsAPI.getAll();
-                return res.data;
-            },
-        });
+        // Auto-categorization as user types
+        const handleQuickAddChange = (text: string) => {
+            setQuickAddText(text);
+            if (!text) return;
+
+            const matched = QUICK_CATEGORIES.find(c => 
+                text.toLowerCase().includes(c.name.toLowerCase())
+            );
+            if (matched && !selectedCategory) {
+                setSelectedCategory(matched.name);
+            }
+        };
+
 
         const { data: subscription } = useQuery({
             queryKey: ["subscriptionStatus"],
@@ -104,6 +115,18 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                 return res.data;
             },
         });
+
+        const { data: budgetsData } = useQuery({
+            queryKey: ["budgets"],
+            queryFn: async () => {
+                const res = await budgetsAPI.getAll();
+                return res.data;
+            }
+        });
+
+        const totalBudget = useMemo(() => {
+            return budgetsData?.reduce((acc: number, curr: any) => acc + curr.amount, 0) || 0;
+        }, [budgetsData]);
 
         const isExpired = !subscription?.isPro && subscription?.trialEndDate && new Date() > new Date(subscription.trialEndDate);
 
@@ -132,22 +155,39 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             setQuickAddText("");
             setAmount("");
             setNotes("");
-            setSelectedTags([]);
             setSelectedCategory(null);
             setLocation(null);
             setIsSplit(false);
         };
 
         const handleSubmit = () => {
+            if (totalBudget === 0) {
+                Alert.alert(
+                    "Budget Required",
+                    "Please set your monthly budget directly from the Home Dashboard or Transactions panel before adding expenses.",
+                    [{ text: "OK", style: "default" }]
+                );
+                return;
+            }
+
             const title = quickAddText.trim() || notes.trim() || selectedCategory || "Untitled Transaction";
-            if (!amount || parseFloat(amount) <= 0) { Alert.alert("Error", "Please enter a valid amount"); return; }
+            
+            // Sanitize amount: remove currency symbols, commas, etc.
+            const cleanAmount = (amount || "").replace(/[^0-9.]/g, "");
+            const parsedAmount = parseFloat(cleanAmount);
+
+            if (!parsedAmount || parsedAmount <= 0) { 
+                Alert.alert("Error", "Please enter a valid amount"); 
+                return; 
+            }
+
             createMutation.mutate({
                 title,
-                amount: parseFloat(amount),
+                amount: parsedAmount,
                 type,
+                category: selectedCategory || "Other",
                 notes: notes.trim() || (location ? `At ${location}` : undefined),
                 date: date.toISOString(),
-                tagIds: selectedTags.length > 0 ? selectedTags : undefined,
             });
         };
 
@@ -188,37 +228,55 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             ]);
         };
 
+        const [isLocating, setIsLocating] = useState(false);
+
         const handleLocation = async () => {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Permission to access location was denied');
-                return;
-            }
+            try {
+                setIsLocating(true);
+                let { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Permission Denied', 'Permission to access location was denied');
+                    return;
+                }
 
-            let loc = await Location.getCurrentPositionAsync({});
-            let reverse = await Location.reverseGeocodeAsync({
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude
-            });
+                // Get current position with balanced accuracy to avoid long waits
+                let loc = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                });
 
-            if (reverse.length > 0) {
-                const addr = reverse[0];
-                const parts = [
-                    addr.name,
-                    addr.street,
-                    addr.district,
-                    addr.city
-                ].filter(Boolean);
-                const displayAddr = parts.slice(0, 2).join(", ") || "Unknown Location";
-                setLocation(displayAddr);
+                // Wrap geocoding in its own try-catch as it often fails due to network/service issues
+                try {
+                    let reverse = await Location.reverseGeocodeAsync({
+                        latitude: loc.coords.latitude,
+                        longitude: loc.coords.longitude
+                    });
+
+                    if (reverse && reverse.length > 0) {
+                        const addr = reverse[0];
+                        const parts = [
+                            addr.name,
+                            addr.street,
+                            addr.district,
+                            addr.city
+                        ].filter(Boolean);
+                        const displayAddr = parts.slice(0, 2).join(", ") || `${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`;
+                        setLocation(displayAddr);
+                    } else {
+                        // Fallback to coordinates if no address parts found
+                        setLocation(`${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`);
+                    }
+                } catch (geoError) {
+                    console.warn("Reverse geocode failed, falling back to coordinates:", geoError);
+                    setLocation(`${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`);
+                }
+            } catch (error) {
+                console.error("Location error:", error);
+                Alert.alert('Location Error', 'Failed to get your location. Please try again.');
+            } finally {
+                setIsLocating(false);
             }
         };
 
-        const toggleTag = (tagId: string) => {
-            setSelectedTags((prev) =>
-                prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
-            );
-        };
 
         const renderBackdrop = useCallback(
             (props: any) => (
@@ -278,7 +336,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                 placeholder="e.g. Starbucks coffee"
                                 placeholderTextColor="#9ca3af"
                                 value={quickAddText}
-                                onChangeText={setQuickAddText}
+                                onChangeText={handleQuickAddChange}
                             />
                         </View>
                         
@@ -343,6 +401,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                         </View>
                         <TouchableOpacity 
                             onPress={handleLocation}
+                            disabled={isLocating}
                             className={`flex-1 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm`}
                         >
                             <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-2">Location</Text>
@@ -432,35 +491,6 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                         </View>
                     </View>
 
-                    {/* All Tags */}
-                    {tags && tags.length > 0 && (
-                        <View className="mx-5 bg-white rounded-2xl p-4 mb-4 border border-gray-100 shadow-sm">
-                            <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-3">All Tags</Text>
-                            <View className="flex-row flex-wrap gap-2">
-                                {tags.map((tag) => {
-                                    const isSelected = selectedTags.includes(tag.id);
-                                    return (
-                                        <TouchableOpacity
-                                            key={tag.id}
-                                            onPress={() => toggleTag(tag.id)}
-                                            className={`px-4 py-2.5 rounded-xl border ${isSelected ? "border-[#FF6A00] bg-orange-50" : "border-gray-200 bg-gray-50"}`}
-                                        >
-                                            <View className="flex-row items-center">
-                                                {isSelected ? (
-                                                    <Check size={12} color="#FF6A00" />
-                                                ) : (
-                                                    <View className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
-                                                )}
-                                                <Text className={`text-xs font-geist-sb ml-1.5 ${isSelected ? "text-[#FF6A00]" : "text-gray-500"}`}>
-                                                    {tag.name}
-                                                </Text>
-                                            </View>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-                        </View>
-                    )}
 
                     {/* Notes */}
                     <View className="mx-5 bg-white rounded-2xl p-4 mb-4 border border-gray-100 shadow-sm">

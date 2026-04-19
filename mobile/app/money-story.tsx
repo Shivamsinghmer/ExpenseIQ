@@ -67,7 +67,7 @@ export default function MoneyStory() {
     const storyData = useMemo(() => {
         if (!summary) return null;
 
-        const topTag = summary.tagBreakdown?.[0];
+        const topTag = summary.categoryBreakdown?.[0];
         
         // Calculate top merchant
         const merchantCounts: Record<string, { count: number, amount: number }> = {};

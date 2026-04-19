@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { z } from "zod";
 import prisma from "../services/prisma";
+import { Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { getOrCreateUser, checkUserAccess } from "../services/userService";
 import { updateStreak } from "../services/streakService";
@@ -11,8 +12,8 @@ const createTransactionSchema = z.object({
     amount: z.number().positive("Amount must be positive"),
     type: z.enum(["INCOME", "EXPENSE"]),
     notes: z.string().max(500).optional(),
+    category: z.string().optional(),
     date: z.string(),
-    tagIds: z.array(z.string()).optional(),
 });
 
 const updateTransactionSchema = createTransactionSchema.partial();
@@ -21,7 +22,6 @@ const querySchema = z.object({
     type: z.enum(["INCOME", "EXPENSE"]).optional(),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
-    tagId: z.string().optional(),
     page: z.string().optional(),
     limit: z.string().optional(),
     search: z.string().optional(),
@@ -37,16 +37,13 @@ export async function getTransactions(req: AuthenticatedRequest, res: Response):
         const limit = parseInt(query.limit || "20");
         const skip = (page - 1) * limit;
 
-        const where: Record<string, any> = { userId: user.id };
+        const where: Prisma.TransactionWhereInput = { userId: user.id };
 
         if (query.type) where.type = query.type;
         if (query.startDate || query.endDate) {
-            where.date = {} as Record<string, Date>;
+            where.date = {};
             if (query.startDate) where.date.gte = new Date(query.startDate);
             if (query.endDate) where.date.lte = new Date(query.endDate);
-        }
-        if (query.tagId) {
-            where.tags = { some: { id: query.tagId } };
         }
         if (query.search) {
             where.title = { contains: query.search, mode: "insensitive" };
@@ -55,7 +52,6 @@ export async function getTransactions(req: AuthenticatedRequest, res: Response):
         const [transactions, total] = await Promise.all([
             prisma.transaction.findMany({
                 where,
-                include: { tags: true },
                 orderBy: { date: "desc" },
                 skip,
                 take: limit,
@@ -86,11 +82,10 @@ export async function getTransactions(req: AuthenticatedRequest, res: Response):
 export async function getTransaction(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
         const user = await getOrCreateUser(req.clerkUserId!);
-        const { id } = req.params;
+        const id = req.params.id as string;
 
         const transaction = await prisma.transaction.findFirst({
-            where: { id, userId: user.id } as any,
-            include: { tags: true },
+            where: { id, userId: user.id },
         });
 
         if (!transaction) {
@@ -109,38 +104,46 @@ export async function getTransaction(req: AuthenticatedRequest, res: Response): 
 export async function createTransaction(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
         const user = await getOrCreateUser(req.clerkUserId!);
+        console.log(`[CreateTx] User ${user.id} (${user.clerkUserId}) initiating transaction`);
 
         const access = checkUserAccess(user);
         if (access === "expired") {
+            console.warn(`[CreateTx] Trial expired for user ${user.id}`);
             res.status(403).json({
                 message: "Trial expired. Please upgrade to Pro to use this feature."
             });
             return;
         }
 
+        console.log(`[CreateTx] Payload:`, JSON.stringify(req.body));
         const data = createTransactionSchema.parse(req.body);
 
         const transaction = await prisma.transaction.create({
             data: {
                 title: data.title,
                 amount: data.amount,
-                type: data.type,
+                type: data.type as any,
                 notes: data.notes,
+                category: data.category || "Other",
                 date: new Date(data.date),
                 userId: user.id,
-                tags: data.tagIds
-                    ? { connect: data.tagIds.map((id: string) => ({ id })) }
-                    : undefined,
-            },
-            include: { tags: true },
+            } as any,
         });
 
+        console.log(`[CreateTx] Success: Transaction ${transaction.id} created`);
+
         // Update streak on successful creation
-        await updateStreak(user.id);
+        try {
+            await updateStreak(user.id);
+            console.log(`[CreateTx] Streak updated for user ${user.id}`);
+        } catch (streakError) {
+            console.error(`[CreateTx] Streak update failed (non-blocking):`, streakError);
+        }
 
         res.status(201).json(transaction);
     } catch (error) {
         if (error instanceof z.ZodError) {
+            console.warn(`[CreateTx] Validation failed:`, JSON.stringify(error.issues));
             res.status(400).json({ error: "Validation failed", details: error.issues });
             return;
         }
@@ -162,12 +165,12 @@ export async function updateTransaction(req: AuthenticatedRequest, res: Response
             return;
         }
 
-        const { id } = req.params;
+        const id = req.params.id as string;
         const data = updateTransactionSchema.parse(req.body);
 
         // Verify ownership
         const existing = await prisma.transaction.findFirst({
-            where: { id, userId: user.id } as any,
+            where: { id, userId: user.id },
         });
 
         if (!existing) {
@@ -175,20 +178,12 @@ export async function updateTransaction(req: AuthenticatedRequest, res: Response
             return;
         }
 
-        const updateData: Record<string, any> = { ...data };
+        const updateData: any = { ...data };
         if (data.date) updateData.date = new Date(data.date);
 
-        if (data.tagIds) {
-            updateData.tags = {
-                set: data.tagIds.map((tagId: string) => ({ id: tagId })),
-            };
-            delete updateData.tagIds;
-        }
-
         const transaction = await prisma.transaction.update({
-            where: { id } as any,
+            where: { id },
             data: updateData,
-            include: { tags: true },
         });
 
         res.json(transaction);
@@ -215,10 +210,10 @@ export async function deleteTransaction(req: AuthenticatedRequest, res: Response
             return;
         }
 
-        const { id } = req.params;
+        const id = req.params.id as string;
 
         const existing = await prisma.transaction.findFirst({
-            where: { id, userId: user.id } as any,
+            where: { id, userId: user.id },
         });
 
         if (!existing) {
@@ -226,7 +221,7 @@ export async function deleteTransaction(req: AuthenticatedRequest, res: Response
             return;
         }
 
-        await prisma.transaction.delete({ where: { id } as any });
+        await prisma.transaction.delete({ where: { id } });
         res.json({ message: "Transaction deleted successfully" });
     } catch (error) {
         console.error("Delete transaction error:", error);
@@ -240,41 +235,38 @@ export async function getSummary(req: AuthenticatedRequest, res: Response): Prom
         const user = await getOrCreateUser(req.clerkUserId!);
         const { startDate, endDate } = req.query;
 
-        const where: Record<string, any> = { userId: user.id };
+        const queryFilter: any = { userId: user.id };
         if (startDate || endDate) {
-            where.date = {} as Record<string, Date>;
-            if (startDate) where.date.gte = new Date(startDate as string);
-            if (endDate) where.date.lte = new Date(endDate as string);
+            queryFilter.date = {};
+            if (startDate) queryFilter.date.gte = new Date(startDate as string);
+            if (endDate) queryFilter.date.lte = new Date(endDate as string);
         }
 
-        const [incomeAgg, expenseAgg, recentTransactions, tagBreakdown, allTx] = await Promise.all([
+        const [incomeAgg, expenseAgg, recentTransactions, categoryData, allTx] = await Promise.all([
             prisma.transaction.aggregate({
-                where: { ...where, type: "INCOME" },
+                where: { ...queryFilter, type: "INCOME" },
                 _sum: { amount: true },
                 _count: true,
             }),
             prisma.transaction.aggregate({
-                where: { ...where, type: "EXPENSE" },
+                where: { ...queryFilter, type: "EXPENSE" },
                 _sum: { amount: true },
                 _count: true,
             }),
             prisma.transaction.findMany({
-                where,
-                include: { tags: true },
+                where: queryFilter,
                 orderBy: { date: "desc" },
                 take: 5,
             }),
-            prisma.tag.findMany({
-                where: { userId: user.id },
-                include: {
-                    transactions: {
-                        where: { ...where, type: "EXPENSE" },
-                        select: { amount: true },
-                    },
-                },
-            }),
+            // @ts-ignore - Bypass Prisma's circular reference TS bug on groupBy
+            prisma.transaction.groupBy({
+                by: ["category"],
+                where: { ...queryFilter, type: "EXPENSE" } as any,
+                _sum: { amount: true },
+                _count: { _all: true },
+            } as any),
             prisma.transaction.findMany({
-                where,
+                where: queryFilter,
                 select: { date: true, amount: true, type: true },
                 orderBy: { date: "asc" },
             }),
@@ -289,11 +281,8 @@ export async function getSummary(req: AuthenticatedRequest, res: Response): Prom
             const start = new Date(startDate ? (startDate as string) : allTx[0].date);
             const end = new Date(endDate ? (endDate as string) : new Date());
 
-
-
             const txMap = new Map<string, { income: number; expense: number }>();
             allTx.forEach(t => {
-                // Use UTC date string to align with the loop
                 const d = t.date.toISOString().split("T")[0];
                 if (!txMap.has(d)) txMap.set(d, { income: 0, expense: 0 });
                 const entry = txMap.get(d)!;
@@ -301,18 +290,15 @@ export async function getSummary(req: AuthenticatedRequest, res: Response): Prom
                 else entry.expense += t.amount;
             });
 
-            // Ensure start covers the first transaction too if earlier
             if (allTx.length > 0 && allTx[0].date < start) {
                 start.setTime(allTx[0].date.getTime());
             }
 
-            // Iterate using UTC to remain consistent
             const current = new Date(start);
-            // Reset to midnight UTC to avoid partial day skips
             current.setUTCHours(0, 0, 0, 0);
 
             const last = new Date(end);
-            last.setUTCHours(23, 59, 59, 999); // Include the entire end day
+            last.setUTCHours(23, 59, 59, 999);
 
             while (current <= last) {
                 const dateStr = current.toISOString().split("T")[0];
@@ -322,7 +308,6 @@ export async function getSummary(req: AuthenticatedRequest, res: Response): Prom
                     income: data.income,
                     expense: data.expense
                 });
-                // Add 1 day safely
                 current.setUTCDate(current.getUTCDate() + 1);
             }
         }
@@ -334,12 +319,10 @@ export async function getSummary(req: AuthenticatedRequest, res: Response): Prom
             incomeCount: incomeAgg._count,
             expenseCount: expenseAgg._count,
             recentTransactions,
-            tagBreakdown: tagBreakdown.map((tag: { id: string; name: string; color: string; transactions: { amount: number }[] }) => ({
-                id: tag.id,
-                name: tag.name,
-                color: tag.color,
-                totalSpent: tag.transactions.reduce((sum: number, t: { amount: number }) => sum + t.amount, 0),
-                count: tag.transactions.length,
+            categoryBreakdown: (categoryData as any[]).map((cat: any) => ({
+                name: cat.category || "Other",
+                totalSpent: cat._sum.amount || 0,
+                count: cat._count._all || 0,
             })),
             chartData,
         });
