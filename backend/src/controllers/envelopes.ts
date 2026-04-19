@@ -16,7 +16,7 @@ const envelopeSchema = z.object({
 export const getEnvelopes = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const user = await getOrCreateUser(req.clerkUserId!);
-        const envelopes = await prisma.budgetEnvelope.findMany({
+        const envelopes = await (prisma as any).budgetEnvelope.findMany({
             where: { userId: user.id },
             orderBy: { createdAt: "desc" },
         });
@@ -31,7 +31,7 @@ export const createEnvelope = async (req: AuthenticatedRequest, res: Response) =
         const user = await getOrCreateUser(req.clerkUserId!);
         const data = envelopeSchema.parse(req.body);
         
-        const envelope = await prisma.budgetEnvelope.create({
+        const envelope = await (prisma as any).budgetEnvelope.create({
             data: {
                 ...data,
                 userId: user.id,
@@ -53,7 +53,7 @@ export const updateEnvelope = async (req: AuthenticatedRequest, res: Response) =
         const user = await getOrCreateUser(req.clerkUserId!);
         const data = envelopeSchema.partial().parse(req.body);
 
-        const envelope = await prisma.budgetEnvelope.update({
+        const envelope = await (prisma as any).budgetEnvelope.update({
             where: { id, userId: user.id },
             data,
         });
@@ -67,7 +67,7 @@ export const deleteEnvelope = async (req: AuthenticatedRequest, res: Response) =
     try {
         const { id } = req.params;
         const user = await getOrCreateUser(req.clerkUserId!);
-        await prisma.budgetEnvelope.delete({
+        await (prisma as any).budgetEnvelope.delete({
             where: { id, userId: user.id },
         });
         res.status(204).send();

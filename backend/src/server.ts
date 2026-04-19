@@ -9,6 +9,7 @@ import paymentRoutes from "./routes/payments";
 import userRoutes from "./routes/users";
 import emiRoutes from "./routes/emis";
 import envelopeRoutes from "./routes/envelopes";
+import streakRoutes from "./routes/streaks";
 
 console.log("--- Environment Verification ---");
 console.log("Server restarting...");
@@ -48,6 +49,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/emis", emiRoutes);
 app.use("/api/envelopes", envelopeRoutes);
+app.use("/api/streaks", streakRoutes);
 
 // 404 handler
 app.use((_req, res) => {

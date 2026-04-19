@@ -16,7 +16,7 @@ const emiSchema = z.object({
 export const getEmis = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const user = await getOrCreateUser(req.clerkUserId!);
-        const emis = await prisma.eMI.findMany({
+        const emis = await (prisma as any).emi.findMany({
             where: { userId: user.id },
             orderBy: { createdAt: "desc" },
         });
@@ -30,8 +30,12 @@ export const createEmi = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const user = await getOrCreateUser(req.clerkUserId!);
         const data = emiSchema.parse(req.body);
+
+        if (data.paidMonths >= data.totalMonths) {
+            data.isDone = true;
+        }
         
-        const emi = await prisma.eMI.create({
+        const emi = await (prisma as any).emi.create({
             data: {
                 ...data,
                 userId: user.id,
@@ -53,7 +57,26 @@ export const updateEmi = async (req: AuthenticatedRequest, res: Response) => {
         const user = await getOrCreateUser(req.clerkUserId!);
         const data = emiSchema.partial().parse(req.body);
 
-        const emi = await prisma.eMI.update({
+        // Fetch existing to handle auto-completion
+        const existing = await (prisma as any).emi.findUnique({
+            where: { id, userId: user.id }
+        });
+
+        if (!existing) {
+            res.status(404).json({ error: "EMI not found" });
+            return;
+        }
+
+        const newPaidMonths = data.paidMonths !== undefined ? data.paidMonths : existing.paidMonths;
+        const totalMonths = data.totalMonths !== undefined ? data.totalMonths : existing.totalMonths;
+
+        if (newPaidMonths >= totalMonths) {
+            data.isDone = true;
+        } else {
+            data.isDone = false;
+        }
+
+        const emi = await (prisma as any).emi.update({
             where: { id, userId: user.id },
             data,
         });
@@ -67,7 +90,7 @@ export const deleteEmi = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
         const user = await getOrCreateUser(req.clerkUserId!);
-        await prisma.eMI.delete({
+        await (prisma as any).emi.delete({
             where: { id, userId: user.id },
         });
         res.status(204).send();

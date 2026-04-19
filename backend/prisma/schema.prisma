@@ -25,8 +25,11 @@ model User {
   tags                  Tag[]
   chatMessages          ChatMessage[]
   orders                Order[]
-  emis                  EMI[]
+  emis                  Emi[]
   envelopes             BudgetEnvelope[]
+  currentStreak         Int           @default(0)
+  longestStreak         Int           @default(0)
+  lastActiveDate        DateTime?
 }
 
 model Order {
@@ -84,7 +87,7 @@ model Tag {
   @@index([userId])
 }
 
-model EMI {
+model Emi {
   id            String   @id @default(cuid())
   title         String
   monthlyAmount Float

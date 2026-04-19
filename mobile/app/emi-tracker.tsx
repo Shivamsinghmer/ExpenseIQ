@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
     View,
     Text,
@@ -24,10 +24,12 @@ import {
 } from "lucide-react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { emisAPI, transactionsAPI } from "../services/api";
+import AddEMISheet, { AddEMISheetRef } from "../components/AddEMISheet";
 
 export default function EMITracker() {
     const router = useRouter();
     const queryClient = useQueryClient();
+    const emiSheetRef = useRef<AddEMISheetRef>(null);
 
     const { data: emis, isLoading: emisLoading } = useQuery({
         queryKey: ["emis"],
@@ -83,6 +85,7 @@ export default function EMITracker() {
                 </TouchableOpacity>
                 <Text className="text-xl font-geist-b text-gray-900">EMI Tracker</Text>
                 <TouchableOpacity 
+                    onPress={() => emiSheetRef.current?.present()}
                     className="w-10 h-10 rounded-full bg-[#FF6A00] items-center justify-center"
                 >
                     <Plus size={24} color="white" />
@@ -190,6 +193,7 @@ export default function EMITracker() {
 
                 <View className="h-10" />
             </ScrollView>
+            <AddEMISheet ref={emiSheetRef} />
         </SafeAreaView>
     );
 }

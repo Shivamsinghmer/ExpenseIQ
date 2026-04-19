@@ -18,7 +18,7 @@ import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { transactionsAPI, paymentsAPI, type SummaryResponse, type Transaction } from "../../services/api";
+import { transactionsAPI, paymentsAPI, streaksAPI, type SummaryResponse, type Transaction } from "../../services/api";
 import {
     ArrowDown, ArrowUp, File, TrendingUp, TrendingDown,
     Crown, AlertCircle, Clock, MessageSquare, Sparkles,
@@ -227,6 +227,17 @@ export default function Dashboard() {
         },
     });
 
+    const {
+        data: streakStats,
+        refetch: refetchStreak,
+    } = useQuery({
+        queryKey: ["streak"],
+        queryFn: async () => {
+            const res = await streaksAPI.getStats();
+            return res.data;
+        },
+    });
+
     const showTrialBanner = !subscription?.isPro && subscription?.trialEndDate;
 
     // Prepare Chart Data
@@ -305,7 +316,7 @@ export default function Dashboard() {
     };
 
     const handleRefresh = async () => {
-        await Promise.all([refetch(), refetchSubscription()]);
+        await Promise.all([refetch(), refetchSubscription(), refetchStreak()]);
     };
 
     const firstName = user?.firstName || "User";
@@ -446,13 +457,18 @@ export default function Dashboard() {
                     <Text className="text-gray-400 text-xs font-geist-md">Avg/Day</Text>
                     <Text className="text-gray-900 text-xl font-geist-b">₹{avgPerDay.toLocaleString("en-IN")}</Text>
                 </View>
-                <View className="flex-1 bg-white rounded-[20px] p-4 shadow-sm border border-gray-100 items-start">
+                <TouchableOpacity 
+                    onPress={() => router.push("/streak")}
+                    className="flex-1 bg-white rounded-[20px] p-4 shadow-sm border border-gray-100 items-start"
+                >
                     <View className="w-9 h-9 rounded-xl bg-orange-50 items-center justify-center mb-3">
                         <Flame size={18} color="#FF6A00" />
                     </View>
                     <Text className="text-gray-400 text-xs font-geist-md">Streak</Text>
-                    <Text className="text-gray-900 text-xl font-geist-b">7 days</Text>
-                </View>
+                    <Text className="text-gray-900 text-xl font-geist-b">
+                        {streakStats?.currentStreak || 0} {streakStats?.currentStreak === 1 ? 'day' : 'days'}
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             {/* ─── Tools Grid ─── */}

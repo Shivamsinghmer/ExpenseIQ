@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../services/prisma";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { getOrCreateUser, checkUserAccess } from "../services/userService";
+import { updateStreak } from "../services/streakService";
 
 // Validation schemas
 const createTransactionSchema = z.object({
@@ -133,6 +134,9 @@ export async function createTransaction(req: AuthenticatedRequest, res: Response
             },
             include: { tags: true },
         });
+
+        // Update streak on successful creation
+        await updateStreak(user.id);
 
         res.status(201).json(transaction);
     } catch (error) {

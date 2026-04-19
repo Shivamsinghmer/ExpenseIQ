@@ -221,4 +221,18 @@ export const envelopesAPI = {
     delete: (id: string) => api.delete(`/envelopes/${id}`),
 };
 
+// Streak & Gamification
+export interface StreakStats {
+    currentStreak: number;
+    longestStreak: number;
+    activeDaysThisMonth: number;
+    activeDates: string[];
+    daysInMonth: number;
+    lastActiveDate: string | null;
+}
+
+export const streaksAPI = {
+    getStats: () => api.get<StreakStats>("/streaks"),
+};
+
 export default api;
