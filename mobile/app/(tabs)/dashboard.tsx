@@ -148,6 +148,9 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
     </html>`;
 }
 
+import { useSheet } from "../../providers/sheet-provider";
+import * as ImagePicker from 'expo-image-picker';
+
 export default function Dashboard() {
     const { signOut } = useAuth();
     const { user } = useUser();
@@ -156,6 +159,24 @@ export default function Dashboard() {
     const [pdfLoading, setPdfLoading] = useState(false);
     const [catTab, setCatTab] = useState<"current" | "prev">("current");
     const queryClient = useQueryClient();
+    const { openSheet } = useSheet();
+
+    const handleScanAndRecord = async () => {
+        const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+        if (permissionResult.granted === false) {
+            Alert.alert("Permission Required", "Camera access is needed to scan receipts.");
+            return;
+        }
+
+        const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            quality: 1,
+        });
+
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            openSheet({ image: result.assets[0].uri });
+        }
+    };
 
     const handleSignOut = async () => {
         try {
@@ -440,7 +461,10 @@ export default function Dashboard() {
                     <Text className="text-gray-900 text-xl font-geist-b">Tools</Text>
                 </View>
                 <View className="flex-row gap-3 mb-3">
-                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                    <TouchableOpacity 
+                        onPress={handleScanAndRecord}
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                    >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <File size={20} color="#FF6A00" />
                         </View>
@@ -448,14 +472,17 @@ export default function Dashboard() {
                     </TouchableOpacity>
                     <TouchableOpacity
                         className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
-                        onPress={() => router.push("/(tabs)/ai")}
+                        onPress={() => router.push("/ai")}
                     >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <MessageSquare size={20} color="#FF6A00" />
                         </View>
                         <Text className="text-gray-900 text-xs font-geist-sb">Ask Money</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                    <TouchableOpacity 
+                        onPress={() => router.push("/money-story")}
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                    >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <Sparkles size={20} color="#FF6A00" />
                         </View>
@@ -463,13 +490,19 @@ export default function Dashboard() {
                     </TouchableOpacity>
                 </View>
                 <View className="flex-row gap-3">
-                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                    <TouchableOpacity 
+                        onPress={() => router.push("/emi-tracker")}
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                    >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <Landmark size={20} color="#FF6A00" />
                         </View>
                         <Text className="text-gray-900 text-xs font-geist-sb">EMI Tracker</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                    <TouchableOpacity 
+                        onPress={() => router.push("/envelopes")}
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                    >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <Wallet size={20} color="#FF6A00" />
                         </View>

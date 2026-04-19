@@ -17,28 +17,26 @@ interface LineChartProps {
 }
 
 export function LineChart({ datasets, labels, height = 220, width = 300, isDark, unit = "₹" }: LineChartProps) {
-    // Increased left margin for better label visibility
-    const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+    // Reduced margins for better fit
+    const margin = { top: 10, right: 10, bottom: 30, left: 30 };
     const chartHeight = height - margin.top - margin.bottom;
     const chartWidth = width - margin.left - margin.right;
 
     // Calculate Max Value
     const allValues = datasets.flatMap((d) => d.data);
     const rawMaxValue = Math.max(...allValues, 0);
-    // Dynamic max value scaling: e.g., if max is 120, scale to 150 or 200.
-    // If all 0, default to 100
+    // Dynamic max value scaling
     let maxValue = 100;
     if (rawMaxValue > 0) {
         const magnitude = Math.pow(10, Math.floor(Math.log10(rawMaxValue)));
-        // Find a nice upper bound
         maxValue = Math.ceil(rawMaxValue / magnitude) * magnitude;
         if (maxValue < rawMaxValue * 1.1) {
-            // Add some headroom if it's too close
             maxValue += magnitude / 2;
         }
     }
 
     const getY = (value: number) => {
+        if (maxValue === 0) return chartHeight;
         return chartHeight - (value / maxValue) * chartHeight;
     };
 
@@ -54,10 +52,7 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
         return val.toString();
     };
 
-    // Grid lines count
     const gridSteps = 4;
-
-    // Label skipping logic
     const labelStep = Math.max(1, Math.ceil(labels.length / 5));
 
     return (
@@ -66,7 +61,7 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                 <Defs>
                     {datasets.map((dataset, idx) => (
                         <LinearGradient key={`grad-${idx}`} id={`fill-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor={dataset.color} stopOpacity="0.2" />
+                            <Stop offset="0" stopColor={dataset.color} stopOpacity="0.15" />
                             <Stop offset="1" stopColor={dataset.color} stopOpacity="0.0" />
                         </LinearGradient>
                     ))}
@@ -77,10 +72,6 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                         const val = (maxValue / gridSteps) * i;
                         const y = getY(val);
 
-                        // We strictly want values 0, 1/4, 2/4, 3/4, 1
-                        // But let's invert the loop so we draw from bottom (0) to top (max) or vice versa?
-                        // Actually standard loop 0..4 is fine. val 0 -> y=height.
-
                         return (
                             <G key={`grid-${i}`}>
                                 <Line
@@ -88,17 +79,17 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                                     y1={y}
                                     x2={chartWidth}
                                     y2={y}
-                                    stroke={isDark ? "#334155" : "#e2e8f0"}
-                                    strokeDasharray={i === 0 ? "" : "5, 5"} // Solid line for base (0), dashed for others
+                                    stroke={isDark ? "#334155" : "#f1f5f9"}
+                                    strokeDasharray={i === 0 ? "" : "3, 3"}
                                     strokeWidth="1"
                                 />
                                 <SvgText
-                                    x="-10"
-                                    y={y + 4}
-                                    fontSize="11"
-                                    fill={isDark ? "#94a3b8" : "#64748b"}
+                                    x="-8"
+                                    y={y + 3}
+                                    fontSize="10"
+                                    fill={isDark ? "#94a3b8" : "#94a3b8"}
                                     textAnchor="end"
-                                    fontWeight="500"
+                                    fontWeight="400"
                                 >
                                     {unit}{formatValue(val)}
                                 </SvgText>

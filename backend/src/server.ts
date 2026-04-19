@@ -7,6 +7,8 @@ import tagRoutes from "./routes/tags";
 import aiRoutes from "./routes/ai";
 import paymentRoutes from "./routes/payments";
 import userRoutes from "./routes/users";
+import emiRoutes from "./routes/emis";
+import envelopeRoutes from "./routes/envelopes";
 
 console.log("--- Environment Verification ---");
 console.log("Server restarting...");
@@ -44,6 +46,8 @@ app.use("/api/tags", tagRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/emis", emiRoutes);
+app.use("/api/envelopes", envelopeRoutes);
 
 // 404 handler
 app.use((_req, res) => {

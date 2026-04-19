@@ -166,4 +166,59 @@ export const aiAPI = {
     clearHistory: () => api.delete("/ai/history"),
 };
 
+// EMI Tracker
+export interface EMI {
+    id: string;
+    title: string;
+    monthlyAmount: number;
+    totalMonths: number;
+    paidMonths: number;
+    startDate: string;
+    isDone: boolean;
+    createdAt: string;
+}
+
+export interface CreateEMIData {
+    title: string;
+    monthlyAmount: number;
+    totalMonths: number;
+    paidMonths?: number;
+    startDate: string;
+}
+
+export const emisAPI = {
+    getAll: () => api.get<EMI[]>("/emis"),
+    create: (data: CreateEMIData) => api.post<EMI>("/emis", data),
+    update: (id: string, data: Partial<CreateEMIData>) => api.put<EMI>(`/emis/${id}`, data),
+    delete: (id: string) => api.delete(`/emis/${id}`),
+};
+
+// Budget Envelopes
+export interface BudgetEnvelope {
+    id: string;
+    title: string;
+    icon?: string;
+    budget: number;
+    spent: number;
+    startDate: string;
+    endDate: string;
+    createdAt: string;
+}
+
+export interface CreateEnvelopeData {
+    title: string;
+    icon?: string;
+    budget: number;
+    spent?: number;
+    startDate: string;
+    endDate: string;
+}
+
+export const envelopesAPI = {
+    getAll: () => api.get<BudgetEnvelope[]>("/envelopes"),
+    create: (data: CreateEnvelopeData) => api.post<BudgetEnvelope>("/envelopes", data),
+    update: (id: string, data: Partial<CreateEnvelopeData>) => api.put<BudgetEnvelope>(`/envelopes/${id}`, data),
+    delete: (id: string) => api.delete(`/envelopes/${id}`),
+};
+
 export default api;

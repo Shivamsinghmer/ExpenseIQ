@@ -8,6 +8,7 @@ import {
     Alert,
     ScrollView,
     Switch,
+    Image,
 } from "react-native";
 import BottomSheet, { 
     BottomSheetBackdrop, 
@@ -36,6 +37,11 @@ interface AddExpenseSheetProps {
     onSMSPress: () => void;
     onUpgrade: () => void;
     smsData?: string;
+    initialData?: {
+        image?: string;
+        title?: string;
+        amount?: string;
+    } | null;
 }
 
 const QUICK_CATEGORIES = [
@@ -56,7 +62,7 @@ const QUICK_CATEGORIES = [
 ];
 
 const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
-    ({ onClose, onSMSPress, onUpgrade, smsData }, ref) => {
+    ({ onClose, onSMSPress, onUpgrade, smsData, initialData }, ref) => {
         const queryClient = useQueryClient();
         const snapPoints = useMemo(() => ["92%"], []);
 
@@ -70,6 +76,18 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         const [location, setLocation] = useState<string | null>(null);
         const [isSplit, setIsSplit] = useState(false);
         const [date] = useState(new Date());
+        const [scannedImage, setScannedImage] = useState<string | null>(null);
+
+        // Effect to handle initialData when opening
+        useEffect(() => {
+            if (initialData) {
+                if (initialData.image) setScannedImage(initialData.image);
+                if (initialData.title) setQuickAddText(initialData.title);
+                if (initialData.amount) setAmount(initialData.amount);
+            } else {
+                setScannedImage(null);
+            }
+        }, [initialData]);
 
         const { data: tags } = useQuery<Tag[]>({
             queryKey: ["tags"],
@@ -230,6 +248,9 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             >
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-5 pb-4">
+                    <TouchableOpacity onPress={() => { (ref as any)?.current?.close(); onClose(); }}>
+                        <X size={22} color="#6B7280" />
+                    </TouchableOpacity>
                     <Text className="text-gray-900 text-lg font-geist-b">Add Expense</Text>
                     <TouchableOpacity
                         onPress={handleSubmit}
@@ -260,6 +281,33 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                 onChangeText={setQuickAddText}
                             />
                         </View>
+                        
+                        {/* Scanned Image Preview */}
+                        {scannedImage && (
+                            <View className="mt-4 rounded-xl overflow-hidden border border-gray-100 h-32 bg-gray-50 flex-row">
+                                <Image 
+                                    source={{ uri: scannedImage }} 
+                                    style={{ width: 80, height: '100%' }}
+                                    resizeMode="cover"
+                                />
+                                <View className="flex-1 p-3 justify-center">
+                                    <View className="flex-row items-center mb-1">
+                                        <Check size={14} color="#22c55e" />
+                                        <Text className="text-gray-700 text-[10px] font-geist-sb ml-1 uppercase">Receipt Scanned</Text>
+                                    </View>
+                                    <Text className="text-gray-400 text-[10px] font-geist-md italic">
+                                        Processing details...
+                                    </Text>
+                                    <TouchableOpacity 
+                                        onPress={() => setScannedImage(null)}
+                                        className="mt-2"
+                                    >
+                                        <Text className="text-red-500 text-[10px] font-geist-sb">Remove Photo</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+
                         <Text className="text-gray-400 text-xs font-geist-md text-center mt-4">or scan / import</Text>
                         <View className="flex-row gap-2 mt-4">
                             <TouchableOpacity onPress={handleCamera} className="flex-1 flex-row items-center justify-center bg-gray-50 rounded-xl py-3 border border-gray-100">

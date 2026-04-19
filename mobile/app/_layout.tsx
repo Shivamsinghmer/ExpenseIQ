@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from "../providers/auth-provider";
 import { QueryProvider } from "../providers/query-provider";
 import { ThemeProvider, useTheme } from "../providers/theme-provider";
@@ -15,8 +16,7 @@ function StatusBarWrapper() {
     return <StatusBar style={isDark ? "light" : "dark"} />;
 }
 
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { SheetProvider } from "../providers/sheet-provider";
 
 export default function RootLayout() {
     const [fontsLoaded] = useFonts({
@@ -38,16 +38,16 @@ export default function RootLayout() {
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
-            <BottomSheetModalProvider>
-                <AuthProvider>
-                    <QueryProvider>
-                        <ThemeProvider>
+            <AuthProvider>
+                <QueryProvider>
+                    <ThemeProvider>
+                        <SheetProvider>
                             <StatusBarWrapper />
                             <Stack screenOptions={{ headerShown: false }} />
-                        </ThemeProvider>
-                    </QueryProvider>
-                </AuthProvider>
-            </BottomSheetModalProvider>
+                        </SheetProvider>
+                    </ThemeProvider>
+                </QueryProvider>
+            </AuthProvider>
         </GestureHandlerRootView>
     );
 }
