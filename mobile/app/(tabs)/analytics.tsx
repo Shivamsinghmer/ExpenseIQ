@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import {
     View, Text, ScrollView, TouchableOpacity, 
-    ActivityIndicator, Platform, Dimensions
+    ActivityIndicator, Platform, Dimensions, Modal, TouchableWithoutFeedback
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, budgetsAPI, type SummaryResponse } from "../../services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -94,24 +94,45 @@ const DonutChart = ({ data, size = 220, strokeWidth = 25, total, selectedCategor
 export default function Analytics() {
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
-    const [timeRange, setTimeRange] = useState("month");
+    const [timeRange, setTimeRange] = useState<"all" | "thismonth" | "lastmonth">("thismonth");
     const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
+    const [showRangeDropdown, setShowRangeDropdown] = useState(false);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+    const rangeTriggerRef = useRef<View>(null);
 
-    // Fetch Summary Data
-    const { data: summary, isLoading } = useQuery<SummaryResponse>({
+    const getDateParams = (): Record<string, string> => {
+        const now = new Date();
+        if (timeRange === "thismonth") {
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            return { startDate: start.toISOString() };
+        } else if (timeRange === "lastmonth") {
+            const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const end = new Date(now.getFullYear(), now.getMonth(), 0);
+            return { startDate: start.toISOString(), endDate: end.toISOString() };
+        }
+        // "all" = 6 months (5 previous + current)
+        const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        return { startDate: start.toISOString() };
+    };
+
+    const { data: summary, isLoading, isFetching } = useQuery<SummaryResponse>({
         queryKey: ["summary", timeRange],
         queryFn: async () => {
-            const res = await transactionsAPI.getSummary({ range: timeRange });
+            const params = getDateParams();
+            const res = await transactionsAPI.getSummary(params);
             return res.data;
         },
+        placeholderData: keepPreviousData,
     });
 
     const { data: allTransactionsData } = useQuery({
         queryKey: ["allTxnsForAnalytics", timeRange],
         queryFn: async () => {
-            const res = await transactionsAPI.getAll({ limit: "150" });
+            const params = getDateParams();
+            const res = await transactionsAPI.getAll({ ...params, limit: "200" });
             return res.data;
-        }
+        },
+        placeholderData: keepPreviousData,
     });
 
     const { data: budgetsData } = useQuery({
@@ -139,12 +160,40 @@ export default function Analytics() {
         }
     }
 
-    if (isLoading) {
-        return <SkeletonLoader type="analytics" />;
-    }
+    // --- Graph Data Processing ---
+    const processedChartData = useMemo(() => {
+        if (!summary?.chartData) return { labels: [], datasets: [] };
 
-    const labels = summary?.chartData?.map(d => new Date(d.date).toLocaleDateString("en-IN", { month: "short" })) || ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-    const chartData = summary?.chartData?.map(d => d.expense) || [5000, 4500, 6000, 5200, 21000, 12000];
+        if (timeRange === "thismonth" || timeRange === "lastmonth") {
+            // Detailed daily view: ONLY show days with transactions
+            const rawData = summary.chartData;
+            const filteredData = rawData.filter(d => d.expense > 0);
+            
+            // Fallback to rawData if empty to prevent crash, but user said "only show days with txns"
+            const data = filteredData.length > 0 ? filteredData : rawData;
+
+            const labels = data.map(d => {
+                const date = new Date(d.date);
+                return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+            });
+            const values = data.map(d => d.expense);
+            return { labels, datasets: [{ data: values, color: "#FF6A00" }] };
+        } else {
+            // Group by month for "All" view (shows last 6 months)
+            const monthlyData: Record<string, number> = {};
+            summary.chartData.forEach(d => {
+                const date = new Date(d.date);
+                const monthKey = date.toLocaleDateString("en-IN", { month: "short" });
+                monthlyData[monthKey] = (monthlyData[monthKey] || 0) + d.expense;
+            });
+
+            const labels = Object.keys(monthlyData);
+            const values = Object.values(monthlyData);
+            return { labels, datasets: [{ data: values, color: "#FF6A00" }] };
+        }
+    }, [summary?.chartData, timeRange]);
+
+
 
     const hasData = summary && summary.categoryBreakdown && summary.categoryBreakdown.length > 0;
     const topCategory = hasData 
@@ -169,170 +218,232 @@ export default function Analytics() {
             showsVerticalScrollIndicator={false}
         >
             <View style={{ paddingTop: insets.top + 20, paddingHorizontal: 24, paddingBottom: 120 }}>
-                {/* Header */}
-                <Text className="text-gray-900 dark:text-white text-[32px] font-geist-b mb-6">Analytics</Text>
-
-                {/* AI Insights */}
-                <View className="mb-6">
-                    <View className="flex-row items-center mb-4">
-                        <Text className="text-[20px]">💡</Text>
-                        <Text className="text-gray-900 dark:text-white text-[20px] font-geist-b ml-2">AI Insights</Text>
-                    </View>
-                    
-                    {!hasData ? (
-                        <View className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-slate-800 border-dashed items-center justify-center">
-                            <Sparkles size={24} color="#d1d5db" style={{ marginBottom: 8 }} />
-                            <Text className="text-gray-400 font-geist-md text-sm text-center">
-                                Add a transaction to continue
-                            </Text>
-                        </View>
-                    ) : (
-                        aiInsights.map((insight) => (
-                            <View key={insight.id} className="bg-white dark:bg-slate-900 rounded-3xl p-4 mb-2 shadow-sm border border-gray-50 dark:border-slate-800 flex-row items-center">
-                                <View className="w-10 h-10 items-center justify-center mr-4">
-                                    <insight.icon size={20} color="#FF6A00" />
-                                </View>
-                                <Text className="flex-1 text-gray-800 dark:text-gray-200 font-geist-md text-sm leading-5">
-                                    {insight.text}
-                                </Text>
-                            </View>
-                        ))
-                    )}
-                </View>
-
-                {/* Filter Controls */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-8">
-                    {["All", "This Month", "Last Month"].map((t) => (
-                        <TouchableOpacity
-                            key={t}
-                            onPress={() => setTimeRange(t.toLowerCase().replace(" ", ""))}
-                            className={`px-6 py-2.5 rounded-full mr-2 border ${t === "This Month" ? "bg-[#FF6A00] border-[#FF6A00]" : "bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 shadow-sm"}`}
-                        >
-                            <Text className={`text-sm font-geist-sb ${t === "This Month" ? "text-white" : "text-gray-500"}`}>{t}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-
-                {!hasData ? (
-                    <View className="flex-1 items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-[32px] border border-gray-50 dark:border-slate-800">
-                        <PieIcon size={48} color="#94a3b8" />
-                        <Text className="text-gray-900 dark:text-gray-100 font-geist-b text-lg mt-4">No data found</Text>
-                        <Text className="text-gray-400 font-geist-md text-sm mt-2 text-center px-10">
-                            We couldn't find any transaction data for analytics in this period.
-                        </Text>
-                    </View>
+                {/* Header & Loading State */}
+                {isLoading && !summary ? (
+                    <SkeletonLoader type="analytics" />
                 ) : (
                     <>
-                        {/* Spending Trend Chart */}
-                        <View className="mb-8">
-                            <Text className="text-gray-900 dark:text-white text-[20px] font-geist-b mb-6">6-Month Spending Trend</Text>
-                            <View className="bg-white dark:bg-slate-900 rounded-[32px] p-4 shadow-sm border border-gray-50 dark:border-slate-800 items-center">
-                                <LineChart
-                                    width={SCREEN_WIDTH - 48 - 32} 
-                                    height={220}
-                                    labels={labels}
-                                    datasets={[{ data: chartData, color: "#FF6A00" }]}
-                                    isDark={isDark}
-                                    unit="₹"
-                                />
-                            </View>
+                        {/* Header */}
+                        <View className="mb-6">
+                            <Text className="text-gray-900 dark:text-white text-[32px] font-geist-b">Analytics</Text>
                         </View>
 
-                        {/* Spending by Category */}
-                        <View className="mb-8">
-                            <Text className="text-gray-900 dark:text-white text-[20px] font-geist-b mb-6">Spending by Category</Text>
-                            
-                            <View className="items-center mb-8 mt-4">
-                                <DonutChart 
-                                    data={summary?.categoryBreakdown || []} 
-                                    total={summary?.totalExpense || 0}
-                                    selectedCategory={selectedCategoryName}
-                                    onSelect={(cat) => setSelectedCategoryName(cat === selectedCategoryName ? null : cat)}
-                                />
+                        {/* AI Insights */}
+                        <View className="mb-6">
+                            <View className="flex-row items-center mb-4">
+                                <Text className="text-[20px]">💡</Text>
+                                <Text className="text-gray-900 dark:text-white text-[20px] font-geist-b ml-2">AI Insights</Text>
                             </View>
+                            
+                            {!hasData ? (
+                                <View className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-slate-800 border-dashed items-center justify-center">
+                                    <Sparkles size={24} color="#d1d5db" style={{ marginBottom: 8 }} />
+                                    <Text className="text-gray-400 font-geist-md text-sm text-center">
+                                        Add a transaction to continue
+                                    </Text>
+                                </View>
+                            ) : (
+                                aiInsights.map((insight) => (
+                                    <View key={insight.id} className="bg-white dark:bg-slate-900 rounded-3xl p-3 mb-2 shadow-sm border border-gray-50 dark:border-slate-800 flex-row items-center">
+                                        <View className="w-10 h-10 items-center justify-center mr-4">
+                                            <insight.icon size={20} color="#FF6A00" />
+                                        </View>
+                                        <Text className="flex-1 text-gray-800 dark:text-gray-200 font-geist-md text-sm leading-5">
+                                            {insight.text}
+                                        </Text>
+                                    </View>
+                                ))
+                            )}
+                        </View>
 
-                            {/* Detailed Category Card */}
-                            {topCategory && (
-                                <View className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-gray-50 dark:border-slate-800">
-                                    <View className="flex-row items-center justify-between mb-6">
-                                        <View className="flex-row items-center">
-                                            <View className="w-10 h-10 rounded-xl bg-blue-50 items-center justify-center mr-3">
-                                                <PieIcon size={20} color={getCategoryColor(topCategory.name)} />
+                        {/* Dropdown Filter */}
+                        <View className="mb-8 z-[100]" ref={rangeTriggerRef}>
+                            <TouchableOpacity 
+                                onPress={() => {
+                                    rangeTriggerRef.current?.measureInWindow((x, y, width, height) => {
+                                        setDropdownPosition({ top: y + height + 5, left: x });
+                                        setShowRangeDropdown(true);
+                                    });
+                                }}
+                                activeOpacity={0.9}
+                                className="bg-[#FF6A00] dark:bg-slate-900 px-6 py-2.5 rounded-full flex-row items-center justify-between self-start min-w-[150px]"
+                            >
+                                <Text className="text-white dark:text-white font-geist-sb text-base mr-2">
+                                    {timeRange === "all" ? "Last 6 Months" : (timeRange === "thismonth" ? "This Month" : "Last Month")}
+                                </Text>
+                                <ChevronRight size={18} color="white" style={{ transform: [{ rotate: showRangeDropdown ? '90deg' : '0deg' }] }} />
+                            </TouchableOpacity>
+
+                            {showRangeDropdown && (
+                                <Modal
+                                    transparent={true}
+                                    visible={showRangeDropdown}
+                                    animationType="fade"
+                                    onRequestClose={() => setShowRangeDropdown(false)}
+                                >
+                                    <TouchableWithoutFeedback onPress={() => setShowRangeDropdown(false)}>
+                                        <View className="flex-1 bg-transparent items-start">
+                                            <View 
+                                                style={{ top: dropdownPosition.top, left: dropdownPosition.left }} 
+                                                className="bg-white dark:bg-slate-900 rounded-[24px] shadow-2xl border border-gray-100 dark:border-slate-800 p-1 z-[999] min-w-[150px]"
+                                            >
+                                                {[
+                                                    { label: "Last 6 Months", value: "all" },
+                                                    { label: "This Month", value: "thismonth" },
+                                                    { label: "Last Month", value: "lastmonth" }
+                                                ].map((t) => (
+                                                    <TouchableOpacity
+                                                        key={t.value}
+                                                        onPress={() => { 
+                                                            setTimeRange(t.value as any); 
+                                                            setSelectedCategoryName(null);
+                                                            setShowRangeDropdown(false);
+                                                        }}
+                                                        className={`px-6 py-2 rounded-full mb-1 flex-row items-center ${timeRange === t.value ? "bg-[#FF6A00]" : ""}`}
+                                                    >
+                                                        <Text className={`font-geist-sb text-base ${timeRange === t.value ? "text-white" : "text-gray-600 dark:text-gray-300"}`}>
+                                                            {t.label}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
                                             </View>
+                                        </View>
+                                    </TouchableWithoutFeedback>
+                                </Modal>
+                            )}
+                        </View>
+
+                        {!hasData ? (
+                            <View className="flex-1 items-center justify-center py-20 bg-white dark:bg-slate-900 rounded-[32px] border border-gray-50 dark:border-slate-800">
+                                <PieIcon size={48} color="#94a3b8" />
+                                <Text className="text-gray-900 dark:text-gray-100 font-geist-b text-lg mt-4">No data found</Text>
+                                <Text className="text-gray-400 font-geist-md text-sm mt-2 text-center px-10">
+                                    We couldn't find any transaction data for analytics in this period.
+                                </Text>
+                            </View>
+                        ) : (
+                            <>
+                                {/* Spending Trend Chart */}
+                                <View className="mb-8">
+                                    <View className="flex-row items-center justify-between mb-4">
+                                        <Text className="text-gray-900 dark:text-white text-[20px] font-geist-b">
+                                            {timeRange === "all" ? "6-Month Spending Trend" : (timeRange === "thismonth" ? "This Month's Spending" : "Last Month's Spending")}
+                                        </Text>
+                                    </View>
+                                    <View className="bg-white dark:bg-slate-900 rounded-[32px] px-4 pt-2 pb-4 shadow-sm border border-gray-50 dark:border-slate-800 items-center">
+                                        <LineChart
+                                            width={SCREEN_WIDTH - 48 - 32} 
+                                            height={220}
+                                            labels={processedChartData.labels}
+                                            datasets={processedChartData.datasets}
+                                            isDark={isDark}
+                                            unit="₹"
+                                        />
+                                    </View>
+                                </View>
+
+                                {/* Spending by Category */}
+                                <View className="mb-8">
+                                    <Text className="text-gray-900 dark:text-white text-[20px] font-geist-b mb-6">Spending by Category</Text>
+                                    
+                                    <View className="items-center mb-8 mt-4">
+                                        <DonutChart 
+                                            data={summary?.categoryBreakdown || []} 
+                                            total={summary?.totalExpense || 0}
+                                            selectedCategory={selectedCategoryName}
+                                            onSelect={(cat) => setSelectedCategoryName(cat === selectedCategoryName ? null : cat)}
+                                        />
+                                    </View>
+
+                                    {/* Detailed Category Card */}
+                                    {topCategory && (
+                                        <View className="bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-gray-50 dark:border-slate-800">
+                                            <View className="flex-row items-center justify-between mb-6">
+                                                <View className="flex-row items-center">
+                                                    <View className="w-10 h-10 rounded-xl bg-blue-50 items-center justify-center mr-3">
+                                                        <PieIcon size={20} color={getCategoryColor(topCategory.name)} />
+                                                    </View>
+                                                    <View>
+                                                        <Text className="text-gray-900 dark:text-white font-geist-b text-base">{topCategory.name}</Text>
+                                                        <Text className="text-gray-400 text-xs">{topCategory.count} transactions</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+
+                                            {/* Stats Row */}
+                                            <View className="flex-row justify-between mb-6">
+                                                <View>
+                                                    <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Total</Text>
+                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-base">₹{topCategory.totalSpent.toLocaleString()}</Text>
+                                                </View>
+                                                <View>
+                                                    <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Average</Text>
+                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-base">₹{Math.floor(topCategory.totalSpent / (topCategory.count || 1))}</Text>
+                                                </View>
+                                                <View>
+                                                    <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Budget</Text>
+                                                    <Text className="text-emerald-500 font-geist-b text-base">₹{budget.toLocaleString()}</Text>
+                                                </View>
+                                            </View>
+
+                                            {/* Budget Progress */}
+                                            {budget > 0 && (
+                                                <View className="mb-6">
+                                                    <View className="flex-row justify-between mb-2">
+                                                        <Text className="text-emerald-500 font-geist-sb text-xs">₹{remaining.toLocaleString()} remaining</Text>
+                                                        <Text className="text-gray-400 font-geist-sb text-xs">{budgetPercentage}%</Text>
+                                                    </View>
+                                                    <View className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                        <View 
+                                                            className="h-full bg-emerald-500 rounded-full" 
+                                                            style={{ width: `${budgetPercentage}%`, backgroundColor: budgetPercentage > 80 ? '#ef4444' : '#10b981' }} 
+                                                        />
+                                                    </View>
+                                                </View>
+                                            )}
+
+                                            {/* Recent Transactions for this Category */}
                                             <View>
-                                                <Text className="text-gray-900 dark:text-white font-geist-b text-base">{topCategory.name}</Text>
-                                                <Text className="text-gray-400 text-xs">{topCategory.count} transactions</Text>
-                                            </View>
-                                        </View>
-                                    </View>
+                                                <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-4">Recent {topCategory.name} Transactions</Text>
+                                                {categoryTransactions.length > 0 ? (
+                                                    <View className="gap-y-4">
+                                                        {categoryTransactions.slice(0, 4).map((t, i) => {
+                                                            const dateStr = new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+                                                            // Extract location from notes if it starts with "At "
+                                                            let location = "Unknown Location";
+                                                            if (t.notes && t.notes.startsWith("At ")) {
+                                                                location = t.notes.substring(3).trim();
+                                                            }
 
-                                    {/* Stats Row */}
-                                    <View className="flex-row justify-between mb-6">
-                                        <View>
-                                            <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Total</Text>
-                                            <Text className="text-gray-900 dark:text-white font-geist-b text-base">₹{topCategory.totalSpent.toLocaleString()}</Text>
-                                        </View>
-                                        <View>
-                                            <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Average</Text>
-                                            <Text className="text-gray-900 dark:text-white font-geist-b text-base">₹{Math.floor(topCategory.totalSpent / (topCategory.count || 1))}</Text>
-                                        </View>
-                                        <View>
-                                            <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Budget</Text>
-                                            <Text className="text-emerald-500 font-geist-b text-base">₹{budget.toLocaleString()}</Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Budget Progress */}
-                                    {budget > 0 && (
-                                        <View className="mb-6">
-                                            <View className="flex-row justify-between mb-2">
-                                                <Text className="text-emerald-500 font-geist-sb text-xs">₹{remaining.toLocaleString()} remaining</Text>
-                                                <Text className="text-gray-400 font-geist-sb text-xs">{budgetPercentage}%</Text>
-                                            </View>
-                                            <View className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                                <View 
-                                                    className="h-full bg-emerald-500 rounded-full" 
-                                                    style={{ width: `${budgetPercentage}%`, backgroundColor: budgetPercentage > 80 ? '#ef4444' : '#10b981' }} 
-                                                />
+                                                            return (
+                                                                <View key={t.id || i} className="flex-row justify-between items-start">
+                                                                    <View className="flex-1 mr-4">
+                                                                        <Text className="text-gray-900 dark:text-white font-geist-sb text-sm" numberOfLines={1}>{t.title}</Text>
+                                                                        <Text className="text-gray-400 text-[10px] mt-0.5" numberOfLines={1}>
+                                                                            {dateStr}  •  {location}
+                                                                        </Text>
+                                                                        {t.notes && t.notes !== location && !t.notes.startsWith("At ") && (
+                                                                            <Text className="text-gray-500 dark:text-gray-400 text-[10px] mt-1 font-geist-md italic" numberOfLines={2}>
+                                                                                "{t.notes}"
+                                                                            </Text>
+                                                                        )}
+                                                                    </View>
+                                                                    <Text className="text-red-500 font-geist-b text-sm">
+                                                                        -₹{t.amount.toLocaleString("en-IN")}
+                                                                    </Text>
+                                                                </View>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                ) : (
+                                                    <Text className="text-gray-400 text-xs italic">No recent transactions found.</Text>
+                                                )}
                                             </View>
                                         </View>
                                     )}
-
-                                    {/* Recent Transactions for this Category */}
-                                    <View>
-                                        <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-4">Recent {topCategory.name} Transactions</Text>
-                                        {categoryTransactions.length > 0 ? (
-                                            <View className="gap-y-4">
-                                                {categoryTransactions.slice(0, 4).map((t, i) => {
-                                                    const dateStr = new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-                                                    // Extract location from notes if it starts with "At "
-                                                    let location = "Unknown Location";
-                                                    if (t.notes && t.notes.startsWith("At ")) {
-                                                        location = t.notes.substring(3).trim();
-                                                    }
-
-                                                    return (
-                                                        <View key={t.id || i} className="flex-row justify-between items-center">
-                                                            <View className="flex-1 mr-4">
-                                                                <Text className="text-gray-900 dark:text-white font-geist-sb text-sm" numberOfLines={1}>{t.title}</Text>
-                                                                <Text className="text-gray-400 text-[10px] mt-0.5" numberOfLines={1}>
-                                                                    {dateStr}  •  {location}
-                                                                </Text>
-                                                            </View>
-                                                            <Text className="text-red-500 font-geist-b text-sm">
-                                                                -₹{t.amount.toLocaleString("en-IN")}
-                                                            </Text>
-                                                        </View>
-                                                    );
-                                                })}
-                                            </View>
-                                        ) : (
-                                            <Text className="text-gray-400 text-xs italic">No recent transactions found.</Text>
-                                        )}
-                                    </View>
                                 </View>
-                            )}
-                        </View>
+                            </>
+                        )}
                     </>
                 )}
             </View>

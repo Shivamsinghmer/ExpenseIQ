@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
     View, Text, TextInput, TouchableOpacity, FlatList,
     ActivityIndicator, KeyboardAvoidingView, Platform, 
-    ScrollView, Dimensions, Image
+    ScrollView, Dimensions, Image, Animated
 } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../providers/theme-provider";
@@ -115,6 +115,134 @@ export default function AI() {
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     };
 
+    const TypingIndicator = () => {
+        const dot1 = useRef(new Animated.Value(0)).current;
+        const dot2 = useRef(new Animated.Value(0)).current;
+        const dot3 = useRef(new Animated.Value(0)).current;
+
+        useEffect(() => {
+            const animate = (val: Animated.Value, delay: number) => {
+                Animated.loop(
+                    Animated.sequence([
+                        Animated.delay(delay),
+                        Animated.timing(val, {
+                            toValue: 1,
+                            duration: 400,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(val, {
+                            toValue: 0,
+                            duration: 400,
+                            useNativeDriver: true,
+                        }),
+                    ])
+                ).start();
+            };
+
+            animate(dot1, 0);
+            animate(dot2, 200);
+            animate(dot3, 400);
+        }, []);
+
+        const dotStyle = (val: Animated.Value) => ({
+            transform: [
+                {
+                    translateY: val.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, -6],
+                    }),
+                },
+            ],
+        });
+
+        return (
+            <View className="flex-row items-center space-x-1.5 px-1 py-1">
+                <Animated.View style={[dotStyle(dot1)]} className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                <Animated.View style={[dotStyle(dot2)]} className="w-1.5 h-1.5 rounded-full bg-gray-400 mx-1" />
+                <Animated.View style={[dotStyle(dot3)]} className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+            </View>
+        );
+    };
+
+    // Parses inline **bold** markers within a single line of text
+    const renderInlineFormatting = (text: string, isUser: boolean, keyPrefix: string) => {
+        const parts = text.split(/(\*\*[^*]+\*\*)/g);
+        return parts.map((part, i) => {
+            if (part.startsWith("**") && part.endsWith("**")) {
+                const boldText = part.slice(2, -2);
+                return (
+                    <Text
+                        key={`${keyPrefix}-b-${i}`}
+                        className={`font-geist-sb ${isUser ? "text-white" : "text-gray-900 dark:text-white"}`}
+                    >
+                        {boldText}
+                    </Text>
+                );
+            }
+            return <Text key={`${keyPrefix}-t-${i}`}>{part}</Text>;
+        });
+    };
+
+    // Parses full message content: handles bullet lines (- ), headers (###), and inline **bold**
+    const renderFormattedContent = (content: string, isUser: boolean) => {
+        // Filter out horizontal rules (---) and remove empty paragraph spacing by filtering whitespace-only lines
+        const lines = content.split("\n").filter(l => l.trim() !== "" && l.trim() !== "---");
+        
+        return lines.map((line, lineIdx) => {
+            const trimmed = line.trim();
+
+            // Header line (###)
+            if (trimmed.startsWith("###")) {
+                const headerText = trimmed.replace(/^###\s*/, "");
+                return (
+                    <Text
+                        key={`line-${lineIdx}`}
+                        className={`text-base font-geist-sb mt-5 mb-1 ${
+                            isUser ? "text-white" : "text-gray-900 dark:text-white"
+                        }`}
+                    >
+                        {renderInlineFormatting(headerText, isUser, `line-${lineIdx}`)}
+                    </Text>
+                );
+            }
+
+            // Bullet point line
+            if (trimmed.startsWith("- ")) {
+                const bulletText = trimmed.slice(2);
+                return (
+                    <View key={`line-${lineIdx}`} className="flex-row mb-2">
+                        <Text className={`text-base mr-2 ${isUser ? "text-white" : "text-gray-800 dark:text-gray-100"}`}>
+                            •
+                        </Text>
+                        <Text
+                            style={{ lineHeight: 22 }}
+                            className={`text-base font-geist-md leading-5 flex-1 ${
+                                isUser ? "text-white" : "text-gray-800 dark:text-gray-100"
+                            }`}
+                        >
+                            {renderInlineFormatting(bulletText, isUser, `line-${lineIdx}`)}
+                        </Text>
+                    </View>
+                );
+            }
+
+            // Normal line with possible inline bold
+            const startsWithBold = trimmed.startsWith("**");
+            return (
+                <Text
+                    key={`line-${lineIdx}`}
+                    style={{ lineHeight: 22 }}
+                    className={`text-base font-geist-md mb-2 ${startsWithBold ? "mt-3" : ""} ${
+                        isUser ? "text-white" : "text-gray-800 dark:text-gray-100"
+                    }`}
+                >
+                    {renderInlineFormatting(line, isUser, `line-${lineIdx}`)}
+                    {lineIdx < lines.length - 1 ? "\n" : ""}
+                </Text>
+            );
+        });
+    };
+
     const renderMessage = ({ item }: { item: ChatMessage }) => {
         const isUser = item.role === "user";
         return (
@@ -134,12 +262,10 @@ export default function AI() {
                         : "bg-white dark:bg-slate-800 shadow-sm rounded-tl-none"
                     }`}
                 >
-                    <Text className={`text-base leading-6 font-geist-md ${
-                        isUser ? "text-white" : "text-gray-800 dark:text-gray-100"
-                    }`}>
-                        {item.content}
-                    </Text>
-                    <Text className={`text-[10px] mt-1.5 ${
+                    <View>
+                        {renderFormattedContent(item.content, isUser)}
+                    </View>
+                    <Text className={`text-[10px] ${
                         isUser ? "text-white/60 text-right" : "text-gray-400"
                     }`}>
                         {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -191,9 +317,8 @@ export default function AI() {
                         ListFooterComponent={
                             askMutation.isPending ? (
                                 <View className="flex-row items-center ml-14 mb-4">
-                                    <View className="bg-white dark:bg-slate-800 rounded-2xl px-4 py-2 flex-row items-center shadow-sm">
-                                        <ActivityIndicator size="small" color="#FF6A00" />
-                                        <Text className="text-gray-400 text-xs font-geist-md ml-2">Crunching data...</Text>
+                                    <View className="bg-white dark:bg-slate-800 rounded-2xl px-5 py-3 shadow-sm">
+                                        <TypingIndicator />
                                     </View>
                                 </View>
                             ) : null

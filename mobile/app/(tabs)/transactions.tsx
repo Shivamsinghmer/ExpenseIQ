@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import {
     View, Text, FlatList, TouchableOpacity, RefreshControl,
-    ActivityIndicator, Alert, TextInput, ScrollView, SectionList
+    ActivityIndicator, Alert, TextInput, ScrollView, SectionList,
+    Modal, TouchableWithoutFeedback
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
@@ -12,14 +13,15 @@ import {
     ArrowUpRight, ArrowDownLeft,
     Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon,
     Zap, HeartPulse, Plane, Gamepad2, GraduationCap,
-    Gift, TrendingUp, Wallet, MoreHorizontal, Trash2
+    Gift, TrendingUp, Wallet, MoreHorizontal, Trash2,
+    ChevronRight, Filter
 } from "lucide-react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
 import BottomSheet from "@gorhom/bottom-sheet";
-import { useRef } from "react";
 import { BudgetSheet } from "../../components/BudgetSheet";
 import SkeletonLoader from "../../components/SkeletonLoader";
+import { TransactionItem } from "../../components/TransactionItem";
 
 // --- Helper: Grouping Logic ---
 const groupTransactions = (transactions: Transaction[]) => {
@@ -72,52 +74,7 @@ const CATEGORY_ICONS: Record<string, any> = {
     Other: MoreHorizontal,
 };
 
-function TransactionItem({ item, onDelete, isExpired }: { item: Transaction; onDelete: (id: string) => void; isExpired: boolean }) {
-    const isIncome = item.type === "INCOME";
-    const CategoryIcon = CATEGORY_ICONS[item.category || "Other"] || MoreHorizontal;
-    
-    const handleDelete = () => {
-        if (isExpired) {
-            Alert.alert("Trial Expired", "Upgrade to Pro to delete transactions.");
-            return;
-        }
-        Alert.alert("Delete Transaction", `Are you sure you want to delete "${item.title}"?`, [
-            { text: "Cancel", style: "cancel" },
-            { text: "Delete", style: "destructive", onPress: () => onDelete(item.id) },
-        ]);
-    };
 
-    const renderRightActions = () => (
-        <TouchableOpacity 
-            activeOpacity={0.8}
-            onPress={handleDelete}
-            className="bg-red-500 justify-center items-center w-[80px]"
-        >
-            <Trash2 size={24} color="#FFF" />
-        </TouchableOpacity>
-    );
-
-    return (
-        <Swipeable renderRightActions={renderRightActions} friction={2}>
-            <View className="flex-row items-center py-4 px-4 bg-white dark:bg-slate-900 border-b border-gray-50 dark:border-slate-800">
-                <View className={`w-11 h-11 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
-                    <CategoryIcon size={20} color={isIncome ? "#10b981" : "#ef4444"} strokeWidth={2.5} />
-                </View>
-                <View className="flex-1">
-                    <Text className="text-gray-900 dark:text-white font-geist-sb text-base" numberOfLines={1}>{item.title}</Text>
-                    <Text className="text-gray-400 dark:text-gray-500 text-xs font-geist-md mt-0.5" numberOfLines={1}>
-                        {item.category || "Other"}
-                    </Text>
-                </View>
-                <View className="items-end">
-                    <Text className={`font-geist-b text-[17px] ${isIncome ? "text-emerald-500" : "text-red-500"}`}>
-                        {isIncome ? "+" : "-"}₹{item.amount.toLocaleString("en-IN")}
-                    </Text>
-                </View>
-            </View>
-        </Swipeable>
-    );
-}
 
 export default function Transactions() {
     const router = useRouter();
@@ -127,11 +84,61 @@ export default function Transactions() {
     const insets = useSafeAreaInsets();
     const [filter, setFilter] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
     const [search, setSearch] = useState("");
+    const [isSearchActive, setIsSearchActive] = useState(false);
     const [page, setPage] = useState(1);
+    const [dateRangeFilter, setDateRangeFilter] = useState<"ALL" | "THIS_MONTH" | "LAST_MONTH">("ALL");
+    const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+    const [showDateDropdown, setShowDateDropdown] = useState(false);
+    const [isBudgetSheetOpen, setIsBudgetSheetOpen] = useState(false);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+    const typeTriggerRef = useRef<View>(null);
+    const dateTriggerRef = useRef<View>(null);
 
-    const queryParams: Record<string, string> = { page: page.toString(), limit: "100" }; // Increased limit for better grouping
+    // Callbacks for BottomSheet
+    const handleSheetChange = useCallback((index: number) => {
+        setIsBudgetSheetOpen(index > 0);
+        if (index > 0) {
+            setShowTypeDropdown(false);
+            setShowDateDropdown(false);
+        }
+    }, []);
+
+    const toggleTypeDropdown = () => {
+        if (isBudgetSheetOpen) return;
+        typeTriggerRef.current?.measureInWindow((x, y, width, height) => {
+            setDropdownPosition({ top: y + height + 5, left: x });
+            setShowTypeDropdown(true);
+        });
+    };
+
+    const toggleDateDropdown = () => {
+        if (isBudgetSheetOpen) return;
+        dateTriggerRef.current?.measureInWindow((x, y, width, height) => {
+            setDropdownPosition({ top: y + height + 5, left: x });
+            setShowDateDropdown(true);
+        });
+    };
+
+    // Build query params — search is handled locally, NOT sent to API
+    const queryParams: Record<string, string> = { page: page.toString(), limit: "200" };
     if (filter !== "ALL") queryParams.type = filter;
-    if (search.trim()) queryParams.search = search.trim();
+
+    if (dateRangeFilter === "THIS_MONTH") {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        queryParams.startDate = start.toISOString();
+    } else if (dateRangeFilter === "LAST_MONTH") {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const end = new Date(now.getFullYear(), now.getMonth(), 0);
+        queryParams.startDate = start.toISOString();
+        queryParams.endDate = end.toISOString();
+    } else {
+        // "ALL" = 6 months (5 previous + current)
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        queryParams.startDate = start.toISOString();
+    }
 
     const { data: subscription } = useQuery({
         queryKey: ["subscriptionStatus"],
@@ -142,7 +149,7 @@ export default function Transactions() {
     });
 
     const { data, isLoading, refetch, isRefetching } = useQuery<TransactionListResponse>({
-        queryKey: ["transactions", filter, search, page],
+        queryKey: ["transactions", filter, dateRangeFilter, page],
         queryFn: async () => { const res = await transactionsAPI.getAll(queryParams); return res.data; },
     });
 
@@ -154,10 +161,22 @@ export default function Transactions() {
         },
     });
 
+    // Local search filtering — no API calls, instant results
+    const filteredTransactions = useMemo(() => {
+        if (!data?.transactions) return [];
+        if (!search.trim()) return data.transactions;
+        const q = search.trim().toLowerCase();
+        return data.transactions.filter(tx =>
+            tx.title.toLowerCase().includes(q) ||
+            (tx.category && tx.category.toLowerCase().includes(q)) ||
+            (tx.notes && tx.notes.toLowerCase().includes(q))
+        );
+    }, [data?.transactions, search]);
+
     const groupedData = useMemo(() => {
-        if (!data?.transactions) return null;
-        return groupTransactions(data.transactions);
-    }, [data?.transactions]);
+        if (!filteredTransactions.length) return null;
+        return groupTransactions(filteredTransactions);
+    }, [filteredTransactions]);
 
     const isExpired = !!(!subscription?.isPro && subscription?.trialEndDate && new Date() > new Date(subscription.trialEndDate));
 
@@ -173,52 +192,129 @@ export default function Transactions() {
                 style={{ paddingTop: insets.top + 10 }}
             >
                 <View className="flex-row items-center justify-between mb-6">
-                    <Text className="text-gray-900 dark:text-white text-[32px] font-geist-b">Transactions</Text>
+                    {isSearchActive ? (
+                        <View className="flex-1 flex-row items-center bg-white dark:bg-slate-800 rounded-2xl px-4 py-2 mr-4 border border-gray-100 dark:border-slate-700 shadow-sm transition-all duration-300">
+                            <Search size={18} color="#94a3b8" />
+                            <TextInput
+                                className="flex-1 ml-3 text-gray-900 dark:text-white font-geist-md text-base py-1"
+                                placeholder="Search transactions..."
+                                placeholderTextColor="#94a3b8"
+                                value={search}
+                                onChangeText={setSearch}
+                                autoFocus
+                            />
+                            <TouchableOpacity onPress={() => { setIsSearchActive(false); setSearch(""); }}>
+                                <X size={18} color="#94a3b8" />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <Text className="text-gray-900 dark:text-white text-[32px] font-geist-b">Transactions</Text>
+                    )}
                     <View className="flex-row items-center bg-white dark:bg-slate-800 rounded-full px-3 py-2 border border-gray-100 dark:border-slate-700 shadow-sm">
-                        <TouchableOpacity className="mr-3">
-                            <Search size={20} color={isDark ? "#94a3b8" : "#4B5563"} />
+                        <TouchableOpacity className="mr-3" onPress={() => setIsSearchActive(!isSearchActive)}>
+                            <Search size={20} color={isSearchActive ? "#FF6A00" : (isDark ? "#94a3b8" : "#4B5563")} />
                         </TouchableOpacity>
                         <View className="w-[1px] h-4 bg-gray-200 dark:bg-slate-700 mr-3" />
-                        <TouchableOpacity onPress={() => budgetSheetRef.current?.expand()}>
+                        <TouchableOpacity 
+                            onPress={() => {
+                                setShowTypeDropdown(false);
+                                setShowDateDropdown(false);
+                                budgetSheetRef.current?.expand();
+                            }}
+                        >
                             <PieChart size={20} color={isDark ? "#94a3b8" : "#4B5563"} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Filters */}
-                <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingRight: 20 }}
-                >
-                    {(["ALL", "INCOME", "EXPENSE"] as const).map((f) => {
-                        const isActive = filter === f;
-                        return (
-                            <TouchableOpacity
-                                key={f}
-                                onPress={() => { setFilter(f); setPage(1); }}
-                                className={`px-5 py-2.5 rounded-full mr-2 border ${isActive ? "bg-[#FF6A00] border-[#FF6A00]" : "bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 shadow-sm"}`}
-                                activeOpacity={0.8}
-                            >
-                                <Text className={`text-sm font-geist-sb ${isActive ? "text-white" : "text-gray-500 dark:text-gray-400"}`}>
-                                    {f === "ALL" ? "All" : f === "INCOME" ? "Income" : "Expense"}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                    <TouchableOpacity
-                        className="px-5 py-2.5 rounded-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 shadow-sm mr-3"
-                        activeOpacity={0.8}
-                    >
-                        <Text className="text-sm font-geist-sb text-gray-500 dark:text-gray-400">This Month</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        className="px-5 py-2.5 rounded-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 shadow-sm mr-3"
-                        activeOpacity={0.8}
-                    >
-                        <Text className="text-sm font-geist-sb text-gray-500 dark:text-gray-400">Last Month</Text>
-                    </TouchableOpacity>
-                </ScrollView>
+                {/* Filter Dropdowns */}
+                <View className="flex-row items-center mb-2">
+                    {/* Type Filter */}
+                    <View className="mr-3" ref={typeTriggerRef}>
+                        <TouchableOpacity 
+                            onPress={toggleTypeDropdown}
+                            activeOpacity={0.9}
+                            className="bg-[#FF6A00] dark:bg-slate-900 px-5 py-2.5 rounded-full flex-row items-center justify-between min-w-[80px]"
+                        >
+                            <Text className="text-white dark:text-white font-geist-sb text-base mr-2">
+                                {filter === "ALL" ? "All" : filter === "INCOME" ? "Income" : "Expense"}
+                            </Text>
+                            <ChevronRight size={14} color="white" style={{ transform: [{ rotate: showTypeDropdown ? '90deg' : '0deg' }] }} />
+                        </TouchableOpacity>
+
+                        {showTypeDropdown && (
+                            <Modal transparent visible={showTypeDropdown} animationType="fade" onRequestClose={() => setShowTypeDropdown(false)}>
+                                <TouchableWithoutFeedback onPress={() => setShowTypeDropdown(false)}>
+                                    <View className="flex-1 bg-transparent items-start">
+                                        <View 
+                                            style={{ top: dropdownPosition.top, left: dropdownPosition.left }} 
+                                            className="bg-white dark:bg-slate-900 rounded-[24px] shadow-2xl border border-gray-100 dark:border-slate-800 p-1 z-[999] min-w-[120px]"
+                                        >
+                                            {[
+                                                { label: "All", value: "ALL" },
+                                                { label: "Income", value: "INCOME" },
+                                                { label: "Expense", value: "EXPENSE" }
+                                            ].map((t) => (
+                                                <TouchableOpacity
+                                                    key={t.value}
+                                                    onPress={() => { setFilter(t.value as any); setPage(1); setShowTypeDropdown(false); }}
+                                                    className={`px-5 py-2 rounded-full mb-1 flex-row items-center ${filter === t.value ? "bg-[#FF6A00]" : ""}`}
+                                                >
+                                                    <Text className={`font-geist-sb text-base ${filter === t.value ? "text-white" : "text-gray-600 dark:text-gray-300"}`}>
+                                                        {t.label}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                </TouchableWithoutFeedback>
+                            </Modal>
+                        )}
+                    </View>
+
+                    {/* Date Range Filter */}
+                    <View ref={dateTriggerRef}>
+                        <TouchableOpacity 
+                            onPress={toggleDateDropdown}
+                            activeOpacity={0.9}
+                            className="bg-[#FF6A00] dark:bg-slate-900 px-5 py-2.5 rounded-full flex-row items-center justify-between min-w-[140px]"
+                        >
+                            <Text className="text-white dark:text-white font-geist-sb text-base mr-2">
+                                {dateRangeFilter === "ALL" ? "Last 6 Months" : (dateRangeFilter === "THIS_MONTH" ? "This Month" : "Last Month")}
+                            </Text>
+                            <ChevronRight size={14} color="white" style={{ transform: [{ rotate: showDateDropdown ? '90deg' : '0deg' }] }} />
+                        </TouchableOpacity>
+
+                        {showDateDropdown && (
+                            <Modal transparent visible={showDateDropdown} animationType="fade" onRequestClose={() => setShowDateDropdown(false)}>
+                                <TouchableWithoutFeedback onPress={() => setShowDateDropdown(false)}>
+                                    <View className="flex-1 bg-transparent items-start">
+                                        <View 
+                                            style={{ top: dropdownPosition.top, left: dropdownPosition.left }} 
+                                            className="bg-white dark:bg-slate-900 rounded-[24px] shadow-2xl border border-gray-100 dark:border-slate-800 p-1 z-[999] min-w-[150px]"
+                                        >
+                                            {[
+                                                { label: "Last 6 Months", value: "ALL" },
+                                                { label: "This Month", value: "THIS_MONTH" },
+                                                { label: "Last Month", value: "LAST_MONTH" }
+                                            ].map((t) => (
+                                                <TouchableOpacity
+                                                    key={t.value}
+                                                    onPress={() => { setDateRangeFilter(t.value as any); setPage(1); setShowDateDropdown(false); }}
+                                                    className={`px-6 py-2 rounded-full mb-1 flex-row items-center ${dateRangeFilter === t.value ? "bg-[#FF6A00]" : ""}`}
+                                                >
+                                                    <Text className={`font-geist-sb text-base ${dateRangeFilter === t.value ? "text-white" : "text-gray-600 dark:text-gray-300"}`}>
+                                                        {t.label}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                </TouchableWithoutFeedback>
+                            </Modal>
+                        )}
+                    </View>
+                </View>
             </View>
 
             {/* List Content */}
@@ -256,8 +352,18 @@ export default function Transactions() {
                                             <TransactionItem 
                                                 key={tx.id} 
                                                 item={tx} 
-                                                onDelete={(id) => deleteMutation.mutate(id)}
+                                                onDelete={(id) => {
+                                                    if (isExpired) {
+                                                        Alert.alert("Trial Expired", "Upgrade to Pro to delete transactions.");
+                                                        return;
+                                                    }
+                                                    Alert.alert("Delete Transaction", `Are you sure you want to delete "${tx.title}"?`, [
+                                                        { text: "Cancel", style: "cancel" },
+                                                        { text: "Delete", style: "destructive", onPress: () => deleteMutation.mutate(id) },
+                                                    ]);
+                                                }}
                                                 isExpired={isExpired}
+                                                showSwipe={true}
                                             />
                                         ))}
                                     </View>
@@ -266,18 +372,22 @@ export default function Transactions() {
                         </View>
                     ))}
 
-                    {(!data?.transactions || data.transactions.length === 0) && (
+                    {(!filteredTransactions || filteredTransactions.length === 0) && (
                         <View className="items-center justify-center py-20 opacity-50">
                             <BadgeDollarSignIcon size={32} color="#9ca3af" />
                             <Text className="text-gray-400 text-base font-geist-md mt-4 text-center px-10">
-                                No transactions found for the selected period
+                                {search.trim() ? `No results for "${search.trim()}"` : "No transactions found for the selected period"}
                             </Text>
                         </View>
                     )}
                     <View style={{ height: 100 }} />
                 </ScrollView>
 
-            <BudgetSheet ref={budgetSheetRef} onClose={() => budgetSheetRef.current?.close()} />
+            <BudgetSheet 
+                ref={budgetSheetRef} 
+                onClose={() => budgetSheetRef.current?.close()} 
+                onChange={handleSheetChange}
+            />
         </View>
     );
 }

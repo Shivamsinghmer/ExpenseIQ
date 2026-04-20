@@ -20,12 +20,13 @@ import {
 } from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
 import { envelopesAPI } from "../services/api";
-import AddEnvelopeSheet, { AddEnvelopeSheetRef } from "../components/AddEnvelopeSheet";
+import AddEnvelopeSheet from "../components/AddEnvelopeSheet";
+import BottomSheet from "@gorhom/bottom-sheet";
 import SkeletonLoader from "../components/SkeletonLoader";
 
 export default function BudgetEnvelopes() {
     const router = useRouter();
-    const envelopeSheetRef = useRef<AddEnvelopeSheetRef>(null);
+    const envelopeSheetRef = useRef<BottomSheet>(null);
 
     const { data: envelopes, isLoading } = useQuery({
         queryKey: ["envelopes"],
@@ -59,7 +60,7 @@ export default function BudgetEnvelopes() {
                 </TouchableOpacity>
                 <Text className="text-xl font-geist-b text-gray-900">Budget Envelopes</Text>
                 <TouchableOpacity 
-                    onPress={() => envelopeSheetRef.current?.present()}
+                    onPress={() => (envelopeSheetRef.current as any)?.expand()}
                     className="w-10 h-10 rounded-full bg-[#FF6A00] items-center justify-center"
                 >
                     <Plus size={24} color="white" />
@@ -155,7 +156,10 @@ export default function BudgetEnvelopes() {
 
                 <View className="h-10" />
             </ScrollView>
-            <AddEnvelopeSheet ref={envelopeSheetRef} />
+            <AddEnvelopeSheet 
+                ref={envelopeSheetRef} 
+                onClose={() => {}} 
+            />
         </SafeAreaView>
     );
 }

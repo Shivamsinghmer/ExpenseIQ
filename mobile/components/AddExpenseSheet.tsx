@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useMemo, useState, useEffect } from "react";
+import React, { forwardRef, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import {
     View,
     Text,
@@ -9,10 +9,17 @@ import {
     ScrollView,
     Switch,
     Image,
+    Modal,
+    TouchableWithoutFeedback,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform
 } from "react-native";
 import BottomSheet, { 
     BottomSheetBackdrop, 
-    BottomSheetScrollView, 
+    BottomSheetScrollView,
+    BottomSheetModal,
+    BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from 'expo-image-picker';
@@ -28,8 +35,22 @@ import {
     ChevronRight, CalendarDays, MapPin, Users,
     Utensils, ShoppingBag, Car, HeartPulse, Home as HomeIcon,
     Gamepad2, Zap, Wallet, MoreHorizontal, Plane,
-    GraduationCap, Gift, TrendingUp, ShoppingCart, Coffee
+    GraduationCap, Gift, TrendingUp, TrendingDown, ShoppingCart, Coffee,
+    Plus
 } from "lucide-react-native";
+
+const AVATARS = [
+    require('../assets/friend.png'),
+    require('../assets/friend2.png'),
+    require('../assets/friend3.png'),
+    require('../assets/friend4.png'),
+    require('../assets/friend5.png'),
+    require('../assets/friend6.png'),
+    require('../assets/friend7.png'),
+    require('../assets/friend8.png'),
+    require('../assets/friend9.png'),
+    require('../assets/friend10.png'),
+];
 
 interface AddExpenseSheetProps {
     onClose: () => void;
@@ -71,10 +92,23 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
         const [notes, setNotes] = useState("");
         const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+        const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+        const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+        const typeTriggerRef = useRef<View>(null);
         const [location, setLocation] = useState<string | null>(null);
         const [isSplit, setIsSplit] = useState(false);
         const [date] = useState(new Date());
         const [scannedImage, setScannedImage] = useState<string | null>(null);
+
+        // Split state
+        const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+        const [friends, setFriends] = useState<{ id: string; name: string; avatar: any }[]>([]);
+        const [splitType, setSplitType] = useState<"EQUALLY" | "MANUAL">("EQUALLY");
+        const [manualAmounts, setManualAmounts] = useState<Record<string, string>>({});
+        const [showSplitDropdown, setShowSplitDropdown] = useState(false);
+        const [newFriendName, setNewFriendName] = useState("");
+        const splitTriggerRef = useRef<View>(null);
+        const [addFriendModalVisible, setAddFriendModalVisible] = useState(false);
 
         // Effect to handle initialData when opening
         useEffect(() => {
@@ -158,6 +192,10 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             setSelectedCategory(null);
             setLocation(null);
             setIsSplit(false);
+            setSelectedFriends([]);
+            setFriends([]);
+            setSplitType("EQUALLY");
+            setManualAmounts({});
         };
 
         const handleSubmit = () => {
@@ -181,14 +219,30 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                 return; 
             }
 
-            createMutation.mutate({
+            const mutationData: any = {
                 title,
                 amount: parsedAmount,
                 type,
                 category: selectedCategory || "Other",
                 notes: notes.trim() || (location ? `At ${location}` : undefined),
                 date: date.toISOString(),
-            });
+            };
+
+            // If split is active, append split info to notes
+            if (isSplit && selectedFriends.length > 0) {
+                const total = parsedAmount;
+                const splitInfo = selectedFriends.map(id => {
+                    const friend = friends.find(f => f.id === id);
+                    const amountStr = splitType === "EQUALLY" 
+                        ? (total / (selectedFriends.length + 1)).toFixed(2)
+                        : manualAmounts[id] || "0";
+                    return `${friend?.name}: ₹${amountStr}`;
+                }).join(", ");
+                
+                mutationData.notes = (mutationData.notes ? `${mutationData.notes} | ` : "") + `Split: ${splitInfo}`;
+            }
+
+            createMutation.mutate(mutationData);
         };
 
         const handleCamera = async () => {
@@ -239,12 +293,11 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                     return;
                 }
 
-                // Get current position with balanced accuracy to avoid long waits
+                // Get current position
                 let loc = await Location.getCurrentPositionAsync({
                     accuracy: Location.Accuracy.Balanced,
                 });
 
-                // Wrap geocoding in its own try-catch as it often fails due to network/service issues
                 try {
                     let reverse = await Location.reverseGeocodeAsync({
                         latitude: loc.coords.latitude,
@@ -262,16 +315,13 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                         const displayAddr = parts.slice(0, 2).join(", ") || `${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`;
                         setLocation(displayAddr);
                     } else {
-                        // Fallback to coordinates if no address parts found
                         setLocation(`${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`);
                     }
                 } catch (geoError) {
-                    console.warn("Reverse geocode failed, falling back to coordinates:", geoError);
                     setLocation(`${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`);
                 }
             } catch (error) {
-                console.error("Location error:", error);
-                Alert.alert('Location Error', 'Failed to get your location. Please try again.');
+                Alert.alert('Location Error', 'Failed to get your location.');
             } finally {
                 setIsLocating(false);
             }
@@ -294,6 +344,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
 
         return (
+            <>
             <BottomSheet
                 ref={ref}
                 index={-1}
@@ -429,20 +480,67 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                             />
                         </View>
 
-                        {/* Type Toggle */}
-                        <View className="flex-row bg-gray-100 p-1 rounded-xl mt-4">
-                            <TouchableOpacity
-                                onPress={() => setType("EXPENSE")}
-                                className={`flex-1 py-2.5 rounded-lg items-center ${type === "EXPENSE" ? "bg-white shadow-sm" : ""}`}
-                            >
-                                <Text className={`text-sm font-geist-sb ${type === "EXPENSE" ? "text-red-500" : "text-gray-400"}`}>Expense</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => setType("INCOME")}
-                                className={`flex-1 py-2.5 rounded-lg items-center ${type === "INCOME" ? "bg-white shadow-sm" : ""}`}
-                            >
-                                <Text className={`text-sm font-geist-sb ${type === "INCOME" ? "text-emerald-500" : "text-gray-400"}`}>Income</Text>
-                            </TouchableOpacity>
+                        {/* Type Selector - New Dropdown Style */}
+                        <View className="flex-row items-center justify-between pt-4 mt-2 border-t border-gray-100">
+                            <Text className="text-gray-500 text-base font-geist-md">Amount type</Text>
+                            <View ref={typeTriggerRef}>
+                                <TouchableOpacity 
+                                    onPress={() => {
+                                        typeTriggerRef.current?.measureInWindow((x, y, width, height) => {
+                                            setDropdownPosition({ top: y + height + 5, right: Dimensions.get('window').width - (x + width) });
+                                            setShowTypeDropdown(true);
+                                        });
+                                    }}
+                                    activeOpacity={0.8}
+                                    className="bg-gray-50 px-6 py-2 rounded-full border border-gray-100 flex-row items-center min-w-[110px] justify-between"
+                                >
+                                    <View className="flex-row items-center">
+                                        {type === "EXPENSE" ? (
+                                            <TrendingDown size={14} color="#ef4444" style={{ marginRight: 6 }} />
+                                        ) : (
+                                            <TrendingUp size={14} color="#10b981" style={{ marginRight: 6 }} />
+                                        )}
+                                        <Text className={`font-geist-sb text-base ${type === "EXPENSE" ? "text-red-500" : "text-emerald-500"}`}>
+                                            {type === "EXPENSE" ? "Expense" : "Income"}
+                                        </Text>
+                                    </View>
+                                    <ChevronRight size={14} color="#9ca3af" style={{ transform: [{ rotate: showTypeDropdown ? '90deg' : '0deg' }], marginLeft: 8 }} />
+                                </TouchableOpacity>
+
+                                {showTypeDropdown && (
+                                    <Modal transparent visible={showTypeDropdown} animationType="fade" onRequestClose={() => setShowTypeDropdown(false)}>
+                                        <TouchableWithoutFeedback onPress={() => setShowTypeDropdown(false)}>
+                                            <View className="flex-1 bg-transparent">
+                                                <View 
+                                                    style={{ 
+                                                        position: 'absolute', 
+                                                        top: dropdownPosition.top, 
+                                                        right: dropdownPosition.right,
+                                                        minWidth: 145 
+                                                    }}
+                                                    className="bg-white rounded-[20px] shadow-2xl border border-gray-100 p-1 z-[999]"
+                                                >
+                                                    {[
+                                                        { label: "Expense", value: "EXPENSE", color: "text-red-500", icon: <TrendingDown size={16} color="#ef4444" /> },
+                                                        { label: "Income", value: "INCOME", color: "text-emerald-500", icon: <TrendingUp size={16} color="#10b981" /> }
+                                                    ].map((t) => (
+                                                        <TouchableOpacity
+                                                            key={t.value}
+                                                            onPress={() => { setType(t.value as any); setShowTypeDropdown(false); }}
+                                                            className={`px-5 py-2 rounded-full flex-row items-center ${type === t.value ? "bg-gray-100" : ""}`}
+                                                        >
+                                                            <View className="mr-3">{t.icon}</View>
+                                                            <Text className={`font-geist-sb text-base ${t.color}`}>
+                                                                {t.label}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </View>
+                                            </View>
+                                        </TouchableWithoutFeedback>
+                                    </Modal>
+                                )}
+                            </View>
                         </View>
                     </View>
 
@@ -459,6 +557,125 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                             value={isSplit}
                         />
                     </View>
+
+                    {/* Extended Split UI */}
+                    {isSplit && (
+                        <View className="mx-5 bg-white rounded-2xl p-5 mb-4 border border-gray-100 shadow-sm">
+                            <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-4">Select Friends</Text>
+                            
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                                <TouchableOpacity 
+                                    className="items-center mr-4"
+                                    onPress={() => setAddFriendModalVisible(true)}
+                                >
+                                    <View className="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 border-dashed items-center justify-center mb-1">
+                                        <Plus size={20} color="#9ca3af" />
+                                    </View>
+                                    <Text className="text-gray-400 text-[10px] font-geist-md">Add</Text>
+                                </TouchableOpacity>
+
+                                {friends.map((friend) => {
+                                    const isSelected = selectedFriends.includes(friend.id);
+                                    return (
+                                        <TouchableOpacity 
+                                            key={friend.id}
+                                            onPress={() => {
+                                                if (isSelected) {
+                                                    setSelectedFriends(selectedFriends.filter(id => id !== friend.id));
+                                                } else {
+                                                    setSelectedFriends([...selectedFriends, friend.id]);
+                                                }
+                                            }}
+                                            className="items-center mr-4"
+                                        >
+                                            <View className={`w-12 h-12 rounded-full overflow-hidden border-2 ${isSelected ? 'border-[#FF6A00]' : 'border-transparent'}`}>
+                                                <Image source={friend.avatar} className="w-full h-full" />
+                                            </View>
+                                            <Text className={`text-[10px] mt-1 font-geist-md ${isSelected ? 'text-[#FF6A00] font-geist-sb' : 'text-gray-500'}`}>
+                                                {friend.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+
+                                {selectedFriends.length > 0 && (
+                                    <View className="border-t border-gray-50 pt-5">
+                                        <View className="flex-row items-center justify-between mb-4">
+                                            <Text className="text-gray-500 text-sm font-geist-md">Split Type</Text>
+                                            <View ref={splitTriggerRef}>
+                                                <TouchableOpacity 
+                                                    onPress={() => {
+                                                        splitTriggerRef.current?.measureInWindow((x, y, width, height) => {
+                                                            setDropdownPosition({ top: y + height + 5, right: Dimensions.get('window').width - (x + width) });
+                                                            setShowSplitDropdown(true);
+                                                        });
+                                                    }}
+                                                    className="bg-gray-50 px-4 py-2 rounded-full border border-gray-100 flex-row items-center"
+                                                >
+                                                    <Text className="text-gray-700 font-geist-sb text-sm mr-2">
+                                                        {splitType === "EQUALLY" ? "Equally" : "Manual"}
+                                                    </Text>
+                                                    <ChevronRight size={12} color="#9ca3af" style={{ transform: [{ rotate: showSplitDropdown ? '90deg' : '0deg' }] }} />
+                                                </TouchableOpacity>
+
+                                                <Modal transparent visible={showSplitDropdown} animationType="fade" onRequestClose={() => setShowSplitDropdown(false)}>
+                                                    <TouchableWithoutFeedback onPress={() => setShowSplitDropdown(false)}>
+                                                        <View className="flex-1 ">
+                                                            <View 
+                                                                style={{ position: 'absolute', top: dropdownPosition.top, right: dropdownPosition.right, minWidth: 120 }}
+                                                                className="bg-white rounded-[20px] shadow-2xl border border-gray-100 p-1"
+                                                            >
+                                                                {["EQUALLY", "MANUAL"].map((mode) => (
+                                                                    <TouchableOpacity
+                                                                        key={mode}
+                                                                        onPress={() => { setSplitType(mode as any); setShowSplitDropdown(false); }}
+                                                                        className={`px-4 py-2 rounded-full ${splitType === mode ? "bg-gray-100" : ""}`}
+                                                                    >
+                                                                        <Text className={`font-geist-sb text-sm ${splitType === mode ? "text-[#FF6A00]" : "text-gray-600"}`}>
+                                                                            {mode === "EQUALLY" ? "Equally" : "Manual"}
+                                                                        </Text>
+                                                                    </TouchableOpacity>
+                                                                ))}
+                                                            </View>
+                                                        </View>
+                                                    </TouchableWithoutFeedback>
+                                                </Modal>
+                                            </View>
+                                        </View>
+
+                                        {splitType === "EQUALLY" ? (
+                                            <View className="rounded-xl p-0">
+                                                <Text className="text-[#FF6A00] text-base font-geist-md text-center">
+                                                    Each person pays ₹{(parseFloat(amount || "0") / (selectedFriends.length + 1)).toFixed(2)}
+                                                </Text>
+                                            </View>
+                                        ) : (
+                                            <View className="gap-y-3">
+                                                {selectedFriends.map(id => {
+                                                    const friend = friends.find(f => f.id === id);
+                                                    return (
+                                                        <View key={id} className="flex-row items-center justify-between bg-gray-50 p-1 rounded-2xl border border-gray-100 mb-1.5">
+                                                            <Text className="text-gray-700 text-sm font-geist-md ml-2">{friend?.name}</Text>
+                                                            <View className="flex-row items-center">
+                                                                <Text className="text-gray-400 text-base mr-1">₹</Text>
+                                                                <TextInput
+                                                                    placeholder="0"
+                                                                    className="text-gray-900 font-geist-sb text-base min-w-[0px] text-right mr-1"
+                                                                    keyboardType="decimal-pad"
+                                                                    value={manualAmounts[id] || ""}
+                                                                    onChangeText={(val) => setManualAmounts({ ...manualAmounts, [id]: val })}
+                                                                />
+                                                            </View>
+                                                        </View>
+                                                    );
+                                                })}
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+                            </View>
+                        )}
 
                     {/* Quick Category Chips */}
                     <View className="mx-5 bg-white rounded-2xl p-4 mb-4 border border-gray-100 shadow-sm">
@@ -484,10 +701,6 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                     </TouchableOpacity>
                                 );
                             })}
-                            {/* Spacers to properly align items to the left on the last row */}
-                            {[...Array(Math.max(0, 4 - (QUICK_CATEGORIES.length % 4)))].map((_, i) => (
-                                <View key={`spacer-${i}`} style={{ width: '22%' }} />
-                            ))}
                         </View>
                     </View>
 
@@ -526,6 +739,88 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                     </View>
                 </BottomSheetScrollView>
             </BottomSheet>
+
+            {/* Add Friend - Native Modal (Mimicking Paste SMS Sheet) */}
+            <Modal
+                visible={addFriendModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setAddFriendModalVisible(false)}
+            >
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={{ flex: 1 }}
+                >
+                    <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.0)", justifyContent: "flex-end" }}>
+                        <TouchableWithoutFeedback onPress={() => setAddFriendModalVisible(false)}>
+                            <View style={{ flex: 1 }} />
+                        </TouchableWithoutFeedback>
+                        
+                        <View 
+                            className="bg-[#F9FAFB] rounded-t-[36px] overflow-hidden"
+                            style={{ maxHeight: "65%" }}
+                        >
+                            {/* Handle Indicator */}
+                            <View className="items-center pt-3 pb-6">
+                                <View className="w-12 h-1 bg-gray-300 rounded-full" />
+                            </View>
+
+                            {/* Header */}
+                            <View className="flex-row items-center justify-between px-6 pt-2 pb-0">
+                                
+                                <Text className="text-gray-900 text-lg font-geist-sb">Add Friend</Text>
+                                <View className="w-6" />
+                                <TouchableOpacity onPress={() => setAddFriendModalVisible(false)}>
+                                    <X size={22} color="#6B7280" />
+                                </TouchableOpacity>
+                                
+                            </View>
+
+                            <View className="px-6 pb-6 pt-1">
+                                <Text className="text-gray-400 text-sm font-geist-md mb-8">Create a name to start splitting expenses</Text>
+                                
+                                <View className="bg-white p-1 rounded-full border border-gray-100 mb-8">
+                                    <TextInput
+                                        className="px-5 py-3 text-gray-900 font-geist-md text-base"
+                                        placeholder="e.g. John Doe"
+                                        placeholderTextColor="#9ca3af"
+                                        value={newFriendName}
+                                        onChangeText={setNewFriendName}
+                                        autoFocus
+                                    />
+                                </View>
+
+                                <View className="flex-row gap-4 mb-6">
+                                    <TouchableOpacity 
+                                        onPress={() => setAddFriendModalVisible(false)}
+                                        className="flex-1 py-3 rounded-full bg-gray-100 items-center justify-center"
+                                    >
+                                        <Text className="text-gray-500 font-geist-sb text-base">Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            if (!newFriendName.trim()) return;
+                                            const newFriend = {
+                                                id: Date.now().toString(),
+                                                name: newFriendName.trim(),
+                                                avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)]
+                                            };
+                                            setFriends([...friends, newFriend]);
+                                            setSelectedFriends([...selectedFriends, newFriend.id]);
+                                            setNewFriendName("");
+                                            setAddFriendModalVisible(false);
+                                        }}
+                                        className="flex-1 py-3 rounded-full bg-[#FF6A00] items-center justify-center shadow-lg shadow-orange-200"
+                                    >
+                                        <Text className="text-white font-geist-sb text-base">Create & Select</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+            </>
         );
     }
 );

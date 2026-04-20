@@ -27,6 +27,7 @@ import {
     Zap, HeartPulse, Plane, Gamepad2, GraduationCap,
     Gift, TrendingUp, Wallet as WalletIcon, MoreHorizontal, Edit2
 } from "lucide-react-native";
+import { TransactionItem } from "../../components/TransactionItem";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 
@@ -47,29 +48,7 @@ const CATEGORY_ICONS: Record<string, any> = {
     Other: MoreHorizontal,
 };
 
-function TransactionItem({ item }: { item: Transaction }) {
-    const isIncome = item.type === "INCOME";
-    const CategoryIcon = CATEGORY_ICONS[item.category || "Other"] || MoreHorizontal;
 
-    return (
-        <View className="bg-white dark:bg-slate-900 rounded-2xl p-4 mb-3 flex-row items-center border border-gray-100 dark:border-slate-800 shadow-sm">
-            <View
-                className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}
-            >
-                <CategoryIcon size={20} color={isIncome ? "#10b981" : "#ef4444"} strokeWidth={2.5} />
-            </View>
-            <View className="flex-1">
-                <Text className="text-gray-900 dark:text-white font-geist-sb text-base">{item.title}</Text>
-                <Text className="text-gray-400 dark:text-gray-500 text-xs font-geist-md mt-0.5">
-                    {item.category || "Other"}
-                </Text>
-            </View>
-            <Text className={`font-geist-b text-base ${isIncome ? "text-emerald-600" : "text-red-500"}`}>
-                {isIncome ? "+" : "-"}₹{item.amount.toLocaleString("en-IN")}
-            </Text>
-        </View>
-    );
-}
 
 const escapeHtml = (unsafe: string) => {
     return unsafe
@@ -508,6 +487,7 @@ export default function Dashboard() {
                 </View>
                 <TouchableOpacity 
                     onPress={() => router.push("/streak")}
+                    activeOpacity={0.85}
                     className="flex-1 bg-white rounded-[20px] p-4 shadow-sm border border-gray-100 items-start"
                 >
                     <View className="w-9 h-9 rounded-xl bg-orange-50 items-center justify-center mb-3">
@@ -528,6 +508,7 @@ export default function Dashboard() {
                 <View className="flex-row gap-3 mb-3">
                     <TouchableOpacity 
                         onPress={handleScanAndRecord}
+                        activeOpacity={0.85}
                         className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
                     >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
@@ -538,6 +519,7 @@ export default function Dashboard() {
                     <TouchableOpacity
                         className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
                         onPress={() => router.push("/ai")}
+                        activeOpacity={0.85}
                     >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <MessageSquare size={20} color="#FF6A00" />
@@ -546,6 +528,7 @@ export default function Dashboard() {
                     </TouchableOpacity>
                     <TouchableOpacity 
                         onPress={() => router.push("/money-story")}
+                        activeOpacity={0.85}
                         className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
                     >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
@@ -557,6 +540,7 @@ export default function Dashboard() {
                 <View className="flex-row gap-3">
                     <TouchableOpacity 
                         onPress={() => router.push("/emi-tracker")}
+                        activeOpacity={0.85}
                         className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
                     >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
@@ -566,6 +550,7 @@ export default function Dashboard() {
                     </TouchableOpacity>
                     <TouchableOpacity 
                         onPress={() => router.push("/envelopes")}
+                        activeOpacity={0.85}
                         className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
                     >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
@@ -577,6 +562,7 @@ export default function Dashboard() {
                         className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
                         onPress={handleDownloadPdf}
                         disabled={pdfLoading}
+                        activeOpacity={0.85}
                     >
                         {pdfLoading ? (
                             <ActivityIndicator size="small" color="#FF6A00" />
@@ -658,7 +644,9 @@ export default function Dashboard() {
 
                 {summary?.recentTransactions && summary.recentTransactions.length > 0 ? (
                     summary.recentTransactions.map((transaction) => (
-                        <TransactionItem key={transaction.id} item={transaction} />
+                        <View key={transaction.id} className="mb-3 bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden">
+                            <TransactionItem item={transaction} />
+                        </View>
                     ))
                 ) : (
                     <View className="bg-white border border-gray-200 border-dashed rounded-2xl p-6 items-center justify-center">

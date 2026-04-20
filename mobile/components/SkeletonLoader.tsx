@@ -92,7 +92,11 @@ export default function SkeletonLoader({ type = 'default' }: SkeletonLoaderProps
     );
 
     const renderAnalytics = () => (
-        <View className="px-5 pt-16">
+        <View className="px-5 pt-4">
+            {/* Title Shimmer */}
+            <View className="mb-6">
+                <ShimmerBlock width={160} height={36} borderRadius={8} />
+            </View>
             <ShimmerBlock width="100%" height={40} borderRadius={20} style={{ marginBottom: 20 }} />
             <ShimmerBlock width="100%" height={120} borderRadius={24} style={{ marginBottom: 24 }} />
             <View className="items-center mb-8">
@@ -105,7 +109,7 @@ export default function SkeletonLoader({ type = 'default' }: SkeletonLoaderProps
     );
 
     return (
-        <View className={`flex-1 ${bgContainer}`}>
+        <View className="flex-1">
             {type === 'dashboard' && renderDashboard()}
             {type === 'list' && renderList()}
             {type === 'analytics' && renderAnalytics()}

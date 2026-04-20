@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from "react-native";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { 
+    View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform, Dimensions,
+    Modal, TouchableWithoutFeedback, TouchableOpacity
+} from "react-native";
 import { useTheme } from "../providers/theme-provider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { 
@@ -30,6 +33,9 @@ export default function SubscriptionScreen() {
     const [isPro, setIsPro] = useState(false);
     const [expiresAt, setExpiresAt] = useState<string | null>(null);
     const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
+    const [showPlanDropdown, setShowPlanDropdown] = useState(false);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+    const planTriggerRef = useRef<View>(null);
     const [trialEndDate, setTrialEndDate] = useState<string | null>(null);
     const { getToken } = useAuth();
 
@@ -82,7 +88,7 @@ export default function SubscriptionScreen() {
                             const token = await getToken();
                             if (token) setAuthToken(token);
                             await paymentsAPI.verifyOrder(orderId);
-                            Alert.alert("Welcome to Pro!", "Experience the full power of ExpenseIQ.");
+                            Alert.alert("Welcome to Pro!", "Experience the full power of ExpensePal.");
                             await checkSubscriptionStatus();
                             handleBack();
                         } catch (err) {
@@ -206,28 +212,76 @@ export default function SubscriptionScreen() {
 
                     {/* Pricing Cards */}
                     <View className="bg-white border border-gray-100 rounded-3xl p-6 shadow-xl shadow-gray-200">
-                        <View className="flex-row bg-[#F3F4F6] p-1.5 rounded-2xl mb-8">
-                            <Pressable 
-                                onPress={() => setSelectedPlan('monthly')}
-                                className={`flex-1 py-3 rounded-xl items-center ${selectedPlan === 'monthly' ? 'bg-white shadow-sm' : ''}`}
+                        {/* Plan Dropdown - Relative Position */}
+                        <View className="mb-8 items-center" ref={planTriggerRef}>
+                            <TouchableOpacity 
+                                onPress={() => {
+                                    planTriggerRef.current?.measureInWindow((x, y, width, height) => {
+                                        setDropdownPosition({ top: y + height + 5, right: Dimensions.get('window').width - (x + width) + 40 });
+                                        setShowPlanDropdown(true);
+                                    });
+                                }}
+                                activeOpacity={0.9}
+                                className="bg-[#FF6A00] dark:bg-slate-900 px-6 py-2.5 rounded-full flex-row items-center justify-between min-w-[200px]"
                             >
-                                <Text className={`font-geist-sb text-sm ${selectedPlan === 'monthly' ? 'text-gray-900' : 'text-gray-500'}`}>Monthly</Text>
-                            </Pressable>
-                            <Pressable 
-                                onPress={() => setSelectedPlan('annual')}
-                                className={`flex-1 py-3 rounded-xl items-center relative ${selectedPlan === 'annual' ? 'bg-white shadow-sm' : ''}`}
-                            >
-                                <View className="absolute -top-1 -right-1 px-2 py-0.5 bg-green-500 rounded-full z-10">
-                                    <Text className="text-white text-[8px] font-geist-b">SAVE 15%</Text>
+                                <View className="flex-row items-center">
+                                    <Text className="text-white dark:text-white font-geist-sb text-base mr-2">
+                                        {selectedPlan === 'monthly' ? "Monthly Billing" : "Annual Billing"}
+                                    </Text>
+                                    {selectedPlan === 'annual' && (
+                                        <View className="px-2 py-0.5 bg-green-500 rounded-full">
+                                            <Text className="text-white text-[8px] font-geist-b">SAVE 15%</Text>
+                                        </View>
+                                    )}
                                 </View>
-                                <Text className={`font-geist-sb text-sm ${selectedPlan === 'annual' ? 'text-gray-900' : 'text-gray-500'}`}>Annual</Text>
-                            </Pressable>
+                                <ChevronRight size={18} color="white" style={{ transform: [{ rotate: showPlanDropdown ? '90deg' : '0deg' }] }} />
+                            </TouchableOpacity>
+
+                            {showPlanDropdown && (
+                                <Modal transparent visible={showPlanDropdown} animationType="fade" onRequestClose={() => setShowPlanDropdown(false)}>
+                                    <TouchableWithoutFeedback onPress={() => setShowPlanDropdown(false)}>
+                                        <View className="flex-1 bg-transparent">
+                                            <View 
+                                                style={{ 
+                                                    position: 'absolute', 
+                                                    top: dropdownPosition.top, 
+                                                    right: dropdownPosition.right,
+                                                    minWidth: 215 
+                                                }}
+                                                className="bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl border border-gray-100 dark:border-slate-800 p-1 z-[999]"
+                                            >
+                                                {[
+                                                    { label: "Monthly Billing", value: "monthly", sub: "₹100 / month" },
+                                                    { label: "Annual Billing", value: "annual", sub: "₹1020 / year • Save 15%", highlight: true }
+                                                ].map((p) => (
+                                                    <TouchableOpacity
+                                                        key={p.value}
+                                                        onPress={() => { setSelectedPlan(p.value as any); setShowPlanDropdown(false); }}
+                                                        className={`px-8 py-2 rounded-full ${selectedPlan === p.value ? "bg-[#FF6A00]" : ""}`}
+                                                    >
+                                                        <View className="flex-row items-center justify-between">
+                                                            <View>
+                                                                <Text className={`font-geist-sb text-base ${selectedPlan === p.value ? "text-white" : "text-gray-900 dark:text-gray-100"}`}>
+                                                                    {p.label}
+                                                                </Text>
+                                                                <Text className={`font-geist-md text-xs ${selectedPlan === p.value ? "text-white/80" : "text-gray-500"}`}>
+                                                                    {p.sub}
+                                                                </Text>
+                                                            </View>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        </View>
+                                    </TouchableWithoutFeedback>
+                                </Modal>
+                            )}
                         </View>
 
                         <View className="items-center mb-8">
                             <View className="flex-row items-baseline">
                                 <Text className="text-gray-900 text-6xl font-geist-b">
-                                    {selectedPlan === 'monthly' ? '₹50' : '₹500'}
+                                    {selectedPlan === 'monthly' ? '₹100' : '₹1020'}
                                 </Text>
                                 <Text className="text-gray-500 ml-2 text-lg font-geist-md">
                                     {selectedPlan === 'monthly' ? '/ month' : '/ year'}
@@ -260,7 +314,7 @@ export default function SubscriptionScreen() {
 
                         <View className="mt-6 flex-row items-center justify-center">
                             <ShieldCheck size={14} color="#9CA3AF" />
-                            <Text className="text-gray-400 font-geist-md text-xs ml-2">Secure payment via Cashfree</Text>
+                            <Text className="text-gray-400 font-geist-md text-xs ml-2">Secure payment via PhonePe</Text>
                         </View>
                     </View>
 

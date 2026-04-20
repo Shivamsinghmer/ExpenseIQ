@@ -19,7 +19,7 @@ interface LineChartProps {
 export function LineChart({ datasets, labels, height = 220, width = 300, isDark, unit = "\u20B9" }: LineChartProps) {
     const [selectedPoint, setSelectedPoint] = useState<{ x: number; y: number; value: number } | null>(null);
 
-    // Adjusted left margin: 36 optimized for spaced unicode tracking
+    // Reduced top margin from 55 to 25 to minimize excessive whitespace
     const margin = { top: 25, right: 15, bottom: 30, left: 36 };
     const chartHeight = height - margin.top - margin.bottom;
     const chartWidth = width - margin.left - margin.right;
@@ -28,8 +28,8 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
     const allValues = datasets.flatMap((d) => d.data);
     const rawMaxValue = Math.max(...allValues, 0);
     
-    // True dynamic scaling (20% padding at the top)
-    const maxValue = rawMaxValue > 0 ? rawMaxValue * 1.2 : 100;
+    // Increased dynamic scaling padding from 20% to 40% to prevent tooltip clipping with reduced margin
+    const maxValue = rawMaxValue > 0 ? rawMaxValue * 1.4 : 100;
 
     const getY = (value: number) => {
         if (maxValue === 0) return chartHeight;
@@ -126,7 +126,7 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
                                 />
-                                {points.length < 20 && points.map((p, i) => (
+                                {points.map((p, i) => (
                                     <G 
                                         key={`dot-group-${i}`} 
                                         onPress={() => setSelectedPoint({ x: p.x, y: p.y, value: p.value })}
@@ -153,42 +153,13 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                         );
                     })}
 
-                    {/* Tooltip Overlay */}
-                    {selectedPoint && (
-                        <G x={selectedPoint.x} y={selectedPoint.y - 30}>
-                            {/* Card Body */}
-                            <Rect
-                                x={-42}
-                                y={-12}
-                                width={84}
-                                height={26}
-                                rx={13}
-                                fill={isDark ? "#334155" : "#1e293b"}
-                            />
-                            {/* Connective Arrow */}
-                            <Path
-                                d="M -6 13 L 0 19 L 6 13 Z"
-                                fill={isDark ? "#334155" : "#1e293b"}
-                            />
-                            <SvgText
-                                x={0}
-                                y={4}
-                                fill={isDark ? "#f8fafc" : "#ffffff"}
-                                fontSize="12"
-                                fontWeight="700"
-                                textAnchor="middle"
-                            >
-                                {`${unit} ${selectedPoint.value.toLocaleString("en-IN")}`}
-                            </SvgText>
-                        </G>
-                    )}
 
-                    {/* X Axis Labels */}
+
                     {labels.map((label, index) => {
-                        // Show first, last, and filtered steps
+                        // Show first, last, and any non-empty labels
                         const isLast = index === labels.length - 1;
                         const isFirst = index === 0;
-                        if (!isFirst && !isLast && index % labelStep !== 0) return null;
+                        if (!isFirst && !isLast && label === "") return null;
 
                         return (
                             <SvgText
@@ -204,6 +175,37 @@ export function LineChart({ datasets, labels, height = 220, width = 300, isDark,
                             </SvgText>
                         );
                     })}
+                    {/* Tooltip Overlay - Rendered LAST in G to be on top */}
+                    {selectedPoint && (
+                        <G x={selectedPoint.x} y={selectedPoint.y - 32}>
+                            {/* Card Body - Smaller dimensions */}
+                            <Rect
+                                x={-35}
+                                y={-12}
+                                width={70}
+                                height={24}
+                                rx={12}
+                                fill={isDark ? "#334155" : "#1e293b"}
+                                stroke={isDark ? "#475569" : "#334155"}
+                                strokeWidth="1"
+                            />
+                            {/* Connective Arrow */}
+                            <Path
+                                d="M -5 12 L 0 17 L 5 12 Z"
+                                fill={isDark ? "#334155" : "#1e293b"}
+                            />
+                            <SvgText
+                                x={0}
+                                y={4}
+                                fill="#ffffff"
+                                fontSize="10"
+                                fontWeight="700"
+                                textAnchor="middle"
+                            >
+                                {`${unit} ${selectedPoint.value.toLocaleString("en-IN")}`}
+                            </SvgText>
+                        </G>
+                    )}
                 </G>
             </Svg>
             </View>

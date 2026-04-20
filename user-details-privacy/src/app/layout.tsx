@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ExpenseIQ - Data Deletion Request",
-  description: "Request to delete your user data from the ExpenseIQ app.",
+  title: "ExpensePal - Data Deletion Request",
+  description: "Request to delete your user data from the ExpensePal app.",
 };
 
 export default function RootLayout({

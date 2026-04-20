@@ -1,6 +1,6 @@
 import React, { forwardRef, useMemo, useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Alert } from "react-native";
-import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Check, Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon, Zap, HeartPulse, Plane, Gamepad2, GraduationCap, Gift, TrendingUp, Wallet, MoreHorizontal } from "lucide-react-native";
 import { budgetsAPI } from "../services/api";
@@ -22,7 +22,7 @@ const CATEGORIES = [
     { name: "Other", icon: MoreHorizontal, color: "#ADB5BD" },
 ];
 
-export const BudgetSheet = forwardRef<BottomSheet, { onClose: () => void }>(({ onClose }, ref) => {
+export const BudgetSheet = forwardRef<BottomSheet, { onClose: () => void, onChange?: (index: number) => void }>(({ onClose, onChange }, ref) => {
     const queryClient = useQueryClient();
     const snapPoints = useMemo(() => ["85%"], []);
 
@@ -81,6 +81,7 @@ export const BudgetSheet = forwardRef<BottomSheet, { onClose: () => void }>(({ o
             enablePanDownToClose
             backdropComponent={(props) => <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.5} />}
             onClose={onClose}
+            onChange={onChange}
             handleIndicatorStyle={{ backgroundColor: "#d1d5db", width: 40 }}
             backgroundStyle={{ backgroundColor: "#F5F5F5", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
             keyboardBehavior="interactive"
@@ -117,7 +118,7 @@ export const BudgetSheet = forwardRef<BottomSheet, { onClose: () => void }>(({ o
                                 </View>
                                 <View className="flex-row items-center justify-end flex-1 max-w-[120px]">
                                     <Text className="text-gray-400 font-geist-md mr-1">₹</Text>
-                                    <TextInput
+                                    <BottomSheetTextInput
                                         className="font-geist-b text-gray-900 text-right w-full"
                                         placeholder="0"
                                         keyboardType="numeric"

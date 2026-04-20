@@ -152,7 +152,7 @@ export default function MoneyStory() {
     const handleShare = async () => {
         try {
             await Share.share({
-                message: `Check out my Financial Wrapped on ExpenseIQ! I spent ₹${storyData?.totalExpense.toLocaleString()} this month. 📈`,
+                message: `Check out my Financial Wrapped on ExpensePal! I spent ₹${storyData?.totalExpense.toLocaleString()} this month. 📈`,
             });
         } catch (error) {
             console.log(error);

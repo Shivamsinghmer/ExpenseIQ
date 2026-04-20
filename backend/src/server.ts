@@ -76,7 +76,7 @@ const getLocalIP = () => {
 
 app.listen(Number(PORT), "0.0.0.0", () => {
     const localIP = getLocalIP();
-    console.log(`🚀 ExpenseIQ API server running on port ${PORT}`);
+    console.log(`🚀 ExpensePal API server running on port ${PORT}`);
     console.log(`🔗 Local access: http://localhost:${PORT}`);
     console.log(`📱 Physical device access: http://${localIP}:${PORT}`);
 });
