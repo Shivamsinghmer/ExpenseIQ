@@ -30,6 +30,10 @@ model User {
   currentStreak         Int           @default(0)
   longestStreak         Int           @default(0)
   lastActiveDate        DateTime?
+  name                  String?
+  avatarUrl             String?
+  currencyCode          String        @default("INR")
+  currencySymbol        String        @default("₹")
 }
 
 model Order {

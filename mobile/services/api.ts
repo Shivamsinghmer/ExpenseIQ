@@ -107,13 +107,25 @@ export interface CreateTransactionData {
     date: string;
 }
 
+export interface Milestone {
+    id: number;
+    days: number;
+    label: string;
+    emoji: string;
+    color: string;
+}
+
+export interface CreateTransactionResponse extends Transaction {
+    newMilestone?: Milestone | null;
+}
+
 // Transactions
 export const transactionsAPI = {
     getAll: (params?: Record<string, string>) =>
         api.get<TransactionListResponse>("/transactions", { params }),
     getById: (id: string) => api.get<Transaction>(`/transactions/${id}`),
     create: (data: CreateTransactionData) =>
-        api.post<Transaction>("/transactions", data),
+        api.post<CreateTransactionResponse>("/transactions", data),
     update: (id: string, data: Partial<CreateTransactionData>) =>
         api.put<Transaction>(`/transactions/${id}`, data),
     delete: (id: string) => api.delete(`/transactions/${id}`),
@@ -217,8 +229,22 @@ export interface StreakStats {
     lastActiveDate: string | null;
 }
 
+export interface LeaderboardEntry {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+    currentStreak?: number;
+    longestStreak?: number;
+}
+
+export interface LeaderboardResponse {
+    longest: LeaderboardEntry[];
+}
+
 export const streaksAPI = {
     getStats: () => api.get<StreakStats>("/streaks"),
+    getLeaderboard: (timeframe: string = "all-time") => 
+        api.get<LeaderboardResponse>("/streaks/leaderboard", { params: { timeframe } }),
 };
 
 // Budgets
@@ -231,6 +257,12 @@ export interface CategoryBudget {
 export const budgetsAPI = {
     getAll: () => api.get<CategoryBudget[]>("/budgets"),
     update: (data: { category: string; amount: number }[]) => api.put<CategoryBudget[]>("/budgets", { budgets: data }),
+};
+
+// User Settings
+export const usersAPI = {
+    updateCurrency: (currencyCode: string, currencySymbol: string) =>
+        api.put("/users/currency", { currencyCode, currencySymbol }),
 };
 
 export default api;

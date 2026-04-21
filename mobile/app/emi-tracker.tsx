@@ -26,11 +26,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { emisAPI, transactionsAPI } from "../services/api";
 import AddEMISheet, { AddEMISheetRef } from "../components/AddEMISheet";
 import SkeletonLoader from "../components/SkeletonLoader";
+import { useCurrency } from "../providers/CurrencyProvider";
 
 export default function EMITracker() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const emiSheetRef = useRef<AddEMISheetRef>(null);
+    const { currency } = useCurrency();
 
     const { data: emis, isLoading: emisLoading } = useQuery({
         queryKey: ["emis"],
@@ -97,7 +99,7 @@ export default function EMITracker() {
                     <View className="flex-row justify-between items-start mb-6">
                         <View>
                             <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-1">Monthly EMI Obligation</Text>
-                            <Text className="text-gray-900 text-3xl font-geist-b">₹{totalMonthlyEMI.toLocaleString()}</Text>
+                            <Text className="text-gray-900 text-3xl font-geist-b">{currency.symbol}{totalMonthlyEMI.toLocaleString()}</Text>
                         </View>
                         <View className="items-end">
                             <Text className="text-gray-900 text-xl font-geist-b">{activeCount}</Text>
@@ -141,7 +143,7 @@ export default function EMITracker() {
                                 <View>
                                     <Text className="text-gray-900 font-geist-b text-base">{emi.title}</Text>
                                     <View className="flex-row items-center mt-1">
-                                        <Text className="text-[#FF6A00] font-geist-b">₹{emi.monthlyAmount.toLocaleString()}</Text>
+                                        <Text className="text-[#FF6A00] font-geist-b">{currency.symbol}{emi.monthlyAmount.toLocaleString()}</Text>
                                         <Text className="text-gray-400 text-xs font-geist-md">/mo</Text>
                                     </View>
                                 </View>
@@ -168,11 +170,11 @@ export default function EMITracker() {
                             <View className="flex-row justify-between mb-4">
                                 <View>
                                     <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Paid</Text>
-                                    <Text className="text-green-600 font-geist-b">₹{paid.toLocaleString()}</Text>
+                                    <Text className="text-green-600 font-geist-b">{currency.symbol}{paid.toLocaleString()}</Text>
                                 </View>
                                 <View className="items-end">
                                     <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Remaining</Text>
-                                    <Text className="text-red-500 font-geist-b">₹{remaining.toLocaleString()}</Text>
+                                    <Text className="text-red-500 font-geist-b">{currency.symbol}{remaining.toLocaleString()}</Text>
                                 </View>
                             </View>
 

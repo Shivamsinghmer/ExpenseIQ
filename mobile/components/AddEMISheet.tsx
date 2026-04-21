@@ -19,6 +19,7 @@ import { Calendar, Tag, CreditCard, ChevronRight, X } from "lucide-react-native"
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { emisAPI } from "../services/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useCurrency } from "../providers/CurrencyProvider";
 
 export type AddEMISheetRef = {
     present: () => void;
@@ -28,6 +29,7 @@ export type AddEMISheetRef = {
 const AddEMISheet = forwardRef<AddEMISheetRef>((props, ref) => {
     const bottomSheetModalRef = useRef<BottomSheetModal>(null);
     const queryClient = useQueryClient();
+    const { currency } = useCurrency();
 
     const [title, setTitle] = useState("");
     const [amount, setAmount] = useState("");
@@ -103,7 +105,7 @@ const AddEMISheet = forwardRef<AddEMISheetRef>((props, ref) => {
                     <View>
                         <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-2">Monthly Amount</Text>
                         <View className="flex-row items-center bg-gray-50 rounded-2xl px-4 py-2">
-                            <Text className="text-gray-400 font-geist-sb mr-2">₹</Text>
+                            <Text className="text-gray-400 font-geist-sb mr-2">{currency.symbol}</Text>
                             <BottomSheetTextInput
                                 className="flex-1 text-gray-900 font-geist-sb text-lg h-12"
                                 placeholder="0.00"

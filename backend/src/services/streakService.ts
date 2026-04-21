@@ -16,7 +16,7 @@ export const updateStreak = async (userId: string) => {
             },
         });
 
-        if (!user) return;
+        if (!user) return null;
 
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -28,7 +28,7 @@ export const updateStreak = async (userId: string) => {
 
         // If the user already recorded something today, don't change the streak.
         if (lastActive && lastActive.getTime() === today.getTime()) {
-            return;
+            return null;
         }
 
         let newStreak = 1;
@@ -48,8 +48,25 @@ export const updateStreak = async (userId: string) => {
                 lastActiveDate: now,
             },
         });
+
+        // Check for milestone
+        const MILESTONES = [
+            { id: 1, days: 3, label: "Beginner", emoji: "🌱", color: "#94a3b8" },
+            { id: 2, days: 7, label: "1 Week", emoji: "⚡", color: "#4ade80" },
+            { id: 3, days: 14, label: "2 Weeks", emoji: "🍃", color: "#22c55e" },
+            { id: 4, days: 30, label: "1 Month", emoji: "🏆", color: "#16a34a" },
+            { id: 5, days: 60, label: "2 Months", emoji: "🎯", color: "#facc15" },
+            { id: 6, days: 90, label: "3 Months", emoji: "🚀", color: "#fbbf24" },
+            { id: 7, days: 180, label: "Half Year", emoji: "💎", color: "#3b82f6" },
+            { id: 8, days: 250, label: "Master", emoji: "🏅", color: "#2563eb" },
+            { id: 9, days: 365, label: "1 Year", emoji: "👑", color: "#f59e0b" },
+        ];
+
+        const reachedMilestone = MILESTONES.find(m => m.days === newStreak);
+        return reachedMilestone || null;
     } catch (error) {
         console.error("Failed to update streak:", error);
+        return null;
     }
 };
 
@@ -107,4 +124,53 @@ export const getStreakStats = async (userId: string) => {
         daysInMonth: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
         lastActiveDate: (user as any).lastActiveDate,
     };
+};
+
+/**
+ * Gets the top users for the leaderboard.
+ * timeframe: 'all-time' | 'weekly' | 'monthly'
+ */
+export const getLeaderboard = async (timeframe: string = "all-time") => {
+    try {
+        const now = new Date();
+        let startDate: Date | null = null;
+
+        if (timeframe === "weekly") {
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        } else if (timeframe === "monthly") {
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1); // Start of current month
+        }
+
+        const where: any = {
+            longestStreak: { gt: 0 }
+        };
+
+        if (startDate) {
+            where.lastActiveDate = {
+                gte: startDate
+            };
+        }
+
+        const topLongest = await (prisma as any).user.findMany({
+            where,
+            select: {
+                id: true,
+                name: true,
+                avatarUrl: true,
+                longestStreak: true,
+                currentStreak: true,
+            },
+            orderBy: {
+                longestStreak: "desc",
+            },
+            take: 50,
+        });
+
+        return {
+            longest: topLongest,
+        };
+    } catch (error) {
+        console.error("Failed to fetch leaderboard:", error);
+        throw error;
+    }
 };

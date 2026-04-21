@@ -10,6 +10,8 @@ import {
     Dimensions,
     Image,
     ActivityIndicator,
+    Modal,
+    TouchableWithoutFeedback,
 } from "react-native";
 import SkeletonLoader from "../../components/SkeletonLoader";
 import { LineChart } from "../../components/LineChart";
@@ -19,6 +21,8 @@ import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import * as FileSystem from 'expo-file-system/legacy';
+const StorageAccessFramework = (FileSystem as any).StorageAccessFramework;
 import { transactionsAPI, paymentsAPI, streaksAPI, type SummaryResponse, type Transaction } from "../../services/api";
 import {
     Landmark, Wallet, ChevronRight, List, Flame, RefreshCw, Map,
@@ -71,7 +75,7 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
             </td>
             <td>${t.type}</td>
             <td>${escapeHtml(t.category || "-")}</td>
-            <td>${escapeHtml(t.notes || "-")}</td>
+            <td>${escapeHtml(t.notes ? t.notes.replace(/EMI:[^|]+\|\s*/, "") : "-")}</td>
         </tr>`
         )
         .join("");
@@ -109,15 +113,15 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
         <div class="summary">
             <div class="summary-card income">
                 <h3>Total Income</h3>
-                <div class="amount">&#8377; ${summary.totalIncome.toFixed(2)}</div>
+                <div class="amount">${(summary as any).currencySymbol || '₹'} ${summary.totalIncome.toFixed(2)}</div>
             </div>
             <div class="summary-card expense">
                 <h3>Total Expenses</h3>
-                <div class="amount">&#8377; ${summary.totalExpense.toFixed(2)}</div>
+                <div class="amount">${(summary as any).currencySymbol || '₹'} ${summary.totalExpense.toFixed(2)}</div>
             </div>
             <div class="summary-card balance">
                 <h3>Balance</h3>
-                <div class="amount">&#8377; ${summary.balance.toFixed(2)}</div>
+                <div class="amount">${(summary as any).currencySymbol || '₹'} ${summary.balance.toFixed(2)}</div>
             </div>
         </div>
         <div class="section-title">All Transactions (${transactions.length})</div>
@@ -146,7 +150,8 @@ import * as ImagePicker from 'expo-image-picker';
 import BottomSheet from "@gorhom/bottom-sheet";
 import { useRef } from "react";
 import { BudgetSheet } from "../../components/BudgetSheet";
-import { budgetsAPI } from "../../services/api";
+import { budgetsAPI, usersAPI } from "../../services/api";
+import { useCurrency, SUPPORTED_CURRENCIES } from "../../providers/CurrencyProvider";
 
 export default function Dashboard() {
     const { signOut } = useAuth();
@@ -158,6 +163,10 @@ export default function Dashboard() {
     const queryClient = useQueryClient();
     const { openSheet } = useSheet();
     const budgetSheetRef = useRef<BottomSheet>(null);
+    const { currency, setCurrency, formatAmount } = useCurrency();
+    const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
+    const [currencyDropdownPosition, setCurrencyDropdownPosition] = useState({ top: 0, right: 0 });
+    const currencyTriggerRef = useRef<View>(null);
 
     const { data: budgetsData } = useQuery({
         queryKey: ["budgets"],
@@ -277,17 +286,43 @@ export default function Dashboard() {
                 base64: false
             });
 
-            if (await Sharing.isAvailableAsync()) {
-                const options: Sharing.SharingOptions = {
-                    mimeType: "application/pdf",
-                    dialogTitle: "ExpensePal Transactions Report",
-                };
-                if (Platform.OS === "ios") {
-                    options.UTI = "com.adobe.pdf";
+            const fileName = "Your_Transactions.pdf";
+            const finalUri = (FileSystem as any).cacheDirectory + fileName;
+            
+            // Rename file to have the correct filename for sharing/saving
+            await FileSystem.copyAsync({
+                from: uri,
+                to: finalUri
+            });
+
+            if (Platform.OS === 'android') {
+                const SAF = StorageAccessFramework;
+                if (SAF) {
+                    const permissions = await SAF.requestDirectoryPermissionsAsync();
+                    if (permissions.granted) {
+                        const base64 = await FileSystem.readAsStringAsync(finalUri, { encoding: (FileSystem as any).EncodingType.Base64 });
+                        await SAF.createFileAsync(permissions.directoryUri, fileName, 'application/pdf')
+                            .then(async (safUri: string) => {
+                                await FileSystem.writeAsStringAsync(safUri, base64, { encoding: (FileSystem as any).EncodingType.Base64 });
+                                Alert.alert("Success", "Report downloaded successfully!");
+                            })
+                            .catch((e: any) => {
+                                console.error(e);
+                                Sharing.shareAsync(finalUri);
+                            });
+                    } else {
+                        await Sharing.shareAsync(finalUri);
+                    }
+                } else {
+                    // Fallback to sharing if SAF is not supported in this version/environment
+                    await Sharing.shareAsync(finalUri);
                 }
-                await Sharing.shareAsync(uri, options);
             } else {
-                Alert.alert("Success", `PDF saved to: ${uri}`);
+                await Sharing.shareAsync(finalUri, {
+                    mimeType: 'application/pdf',
+                    UTI: 'com.adobe.pdf',
+                    dialogTitle: 'Download Report'
+                });
             }
         } catch (error: any) {
             console.error("PDF generation error:", error);
@@ -390,25 +425,46 @@ export default function Dashboard() {
                         <Text className="text-gray-900 text-2xl font-geist-b">Hello, {firstName} 👋</Text>
                         <Text className="text-gray-400 text-sm font-geist-md mt-1">{dateStr}</Text>
                     </View>
-                    <TouchableOpacity
-                        onPress={() => {
-                            Alert.alert("Account", "Manage your account", [
-                                { text: "Cancel", style: "cancel" },
-                                { text: "Sign Out", style: "destructive", onPress: handleSignOut },
-                            ]);
-                        }}
-                    >
-                        {user?.imageUrl ? (
-                            <Image
-                                source={{ uri: user.imageUrl }}
-                                className="w-10 h-10 rounded-full border-2 border-[#FF6A00]"
-                            />
-                        ) : (
-                            <View className="w-10 h-10 rounded-full bg-[#FF6A00] items-center justify-center">
-                                <Text className="text-white font-geist-b text-lg">{firstName.charAt(0)}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+
+                    <View className="flex-row items-center">
+                        {/* Currency Selector */}
+                        <View ref={currencyTriggerRef}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    currencyTriggerRef.current?.measureInWindow((x, y, width, height) => {
+                                        setCurrencyDropdownPosition({ top: y + height + 8, right: Dimensions.get('window').width - (x + width) });
+                                        setShowCurrencyDropdown(true);
+                                    });
+                                }}
+                                activeOpacity={0.8}
+                                className="flex-row items-center bg-white px-3 py-2 rounded-full shadow-sm border border-gray-50 mr-3"
+                            >
+                                <Text className="text-lg mr-2">{currency.flag}</Text>
+                                <Text className="text-sm font-geist-sb text-[#FF6A00]">{currency.symbol}</Text>
+                                <ChevronRight size={12} color="#9ca3af" style={{ transform: [{ rotate: showCurrencyDropdown ? '90deg' : '0deg' }], marginLeft: 4 }} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={() => {
+                                Alert.alert("Account", "Manage your account", [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Sign Out", style: "destructive", onPress: handleSignOut },
+                                ]);
+                            }}
+                        >
+                            {user?.imageUrl ? (
+                                <Image
+                                    source={{ uri: user.imageUrl }}
+                                    className="w-10 h-10 rounded-full border-2 border-[#FF6A00]"
+                                />
+                            ) : (
+                                <View className="w-10 h-10 rounded-full bg-[#FF6A00] items-center justify-center">
+                                    <Text className="text-white font-geist-b text-lg">{firstName.charAt(0)}</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 
@@ -424,7 +480,7 @@ export default function Dashboard() {
                     </TouchableOpacity>
                     
                     <Text className="text-[#FF6A00] text-center text-4xl font-geist-b mb-4">
-                        ₹{totalExpense.toLocaleString("en-IN")}
+                        {formatAmount(totalExpense)}
                     </Text>
 
                     {budget === 0 && (
@@ -453,11 +509,11 @@ export default function Dashboard() {
                             <View className="flex-row justify-between">
                                 <View>
                                     <Text className="text-gray-400 text-xs font-geist-md">Remaining</Text>
-                                    <Text className="text-emerald-600 text-lg font-geist-b">₹{remaining.toLocaleString("en-IN")}</Text>
+                                    <Text className="text-emerald-600 text-lg font-geist-b">{formatAmount(remaining)}</Text>
                                 </View>
                                 <View className="items-end">
                                     <Text className="text-gray-400 text-xs font-geist-md">Budget</Text>
-                                    <Text className="text-gray-800 text-lg font-geist-b">₹{budget.toLocaleString("en-IN")}</Text>
+                                    <Text className="text-gray-800 text-lg font-geist-b">{formatAmount(budget)}</Text>
                                 </View>
                             </View>
                         </>
@@ -483,7 +539,7 @@ export default function Dashboard() {
                         <TrendingUp size={18} color="#FF6A00" />
                     </View>
                     <Text className="text-gray-400 text-xs font-geist-md">Avg/Day</Text>
-                    <Text className="text-gray-900 text-xl font-geist-b">₹{avgPerDay.toLocaleString("en-IN")}</Text>
+                    <Text className="text-gray-900 text-xl font-geist-b">{formatAmount(avgPerDay)}</Text>
                 </View>
                 <TouchableOpacity 
                     onPress={() => router.push("/streak")}
@@ -564,16 +620,12 @@ export default function Dashboard() {
                         disabled={pdfLoading}
                         activeOpacity={0.85}
                     >
-                        {pdfLoading ? (
-                            <ActivityIndicator size="small" color="#FF6A00" />
-                        ) : (
-                            <>
-                                <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
-                                    <File size={20} color="#FF6A00" />
-                                </View>
-                                <Text className="text-gray-900 text-xs font-geist-sb">Report</Text>
-                            </>
-                        )}
+                        <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                            <File size={20} color="#FF6A00" />
+                        </View>
+                        <Text className="text-gray-900 text-xs font-geist-sb">
+                            {pdfLoading ? "Downloading" : "Report"}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -659,6 +711,43 @@ export default function Dashboard() {
             </View>
             </ScrollView>
             <BudgetSheet ref={budgetSheetRef} onClose={() => budgetSheetRef.current?.close()} />
+
+            {/* Currency Dropdown Modal */}
+            {showCurrencyDropdown && (
+                <Modal transparent visible={showCurrencyDropdown} animationType="fade" onRequestClose={() => setShowCurrencyDropdown(false)}>
+                    <TouchableWithoutFeedback onPress={() => setShowCurrencyDropdown(false)}>
+                        <View className="flex-1 bg-transparent">
+                            <View 
+                                style={{ 
+                                    position: 'absolute', 
+                                    top: currencyDropdownPosition.top, 
+                                    right: currencyDropdownPosition.right,
+                                    width: 120 
+                                }}
+                                className="bg-white rounded-[24px] shadow-2xl border border-gray-100 p-1 z-[999]"
+                            >
+                                {SUPPORTED_CURRENCIES.map((curr) => (
+                                    <TouchableOpacity
+                                        key={curr.code}
+                                        onPress={() => { setCurrency(curr); setShowCurrencyDropdown(false); }}
+                                        className={`px-4 py-2 rounded-full flex-row items-center justify-between ${currency.code === curr.code ? "bg-orange-50" : ""}`}
+                                    >
+                                        <View className="flex-row items-center">
+                                            <Text className="text-lg mr-3">{curr.flag}</Text>
+                                            <Text className={`font-geist-sb text-sm ${currency.code === curr.code ? "text-[#FF6A00]" : "text-gray-700"}`}>
+                                                {curr.code}
+                                            </Text>
+                                        </View>
+                                        <Text className={`font-geist-sb text-sm ${currency.code === curr.code ? "text-[#FF6A00]" : "text-gray-400"}`}>
+                                            {curr.symbol}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+                    </TouchableWithoutFeedback>
+                </Modal>
+            )}
         </View>
     );
 }

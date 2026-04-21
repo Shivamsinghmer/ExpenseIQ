@@ -133,14 +133,21 @@ export async function createTransaction(req: AuthenticatedRequest, res: Response
         console.log(`[CreateTx] Success: Transaction ${transaction.id} created`);
 
         // Update streak on successful creation
+        let newMilestone = null;
         try {
-            await updateStreak(user.id);
+            newMilestone = await updateStreak(user.id);
+            if (newMilestone) {
+                console.log(`[CreateTx] Milestone reached: ${newMilestone.label}`);
+            }
             console.log(`[CreateTx] Streak updated for user ${user.id}`);
         } catch (streakError) {
             console.error(`[CreateTx] Streak update failed (non-blocking):`, streakError);
         }
 
-        res.status(201).json(transaction);
+        res.status(201).json({
+            ...transaction,
+            newMilestone
+        });
     } catch (error) {
         if (error instanceof z.ZodError) {
             console.warn(`[CreateTx] Validation failed:`, JSON.stringify(error.issues));

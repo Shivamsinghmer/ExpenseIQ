@@ -7,6 +7,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
 import { transactionsAPI, budgetsAPI, type SummaryResponse } from "../../services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCurrency } from "../../providers/CurrencyProvider";
 import { 
     Sparkles, ChevronRight, TrendingUp, 
     TrendingDown, IndianRupee, PieChart as PieIcon,
@@ -14,10 +15,15 @@ import {
     MessageSquare,
     Filter,
     AlertCircle,
-    Flame
+    Flame,
+    ShieldCheck,
+    Activity,
+    Info,
+    Shield
 } from "lucide-react-native";
 import SkeletonLoader from "../../components/SkeletonLoader";
 import { LineChart } from "../../components/LineChart";
+import { emisAPI, envelopesAPI } from "../../services/api";
 import Svg, { G, Path, Circle, Text as SvgText } from "react-native-svg";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -43,6 +49,7 @@ const getCategoryColor = (name: string) => CATEGORY_COLORS[name] || CATEGORY_COL
 
 // --- Simple Donut Chart Component ---
 const DonutChart = ({ data, size = 220, strokeWidth = 25, total, selectedCategory, onSelect }: { data: any[], size?: number, strokeWidth?: number, total: number, selectedCategory: string | null, onSelect: (cat: string) => void }) => {
+    const { formatAmount } = useCurrency();
     // Subtract extra margin (10) so the outer strokes don't clip against the Svg bounding box when selected
     const radius = (size - strokeWidth - 10) / 2;
     const center = size / 2;
@@ -84,7 +91,7 @@ const DonutChart = ({ data, size = 220, strokeWidth = 25, total, selectedCategor
                 <View className="w-6 h-6 items-center justify-center mb-1">
                     <PieIcon size={14} color="#94a3b8" />
                 </View>
-                <Text className="text-gray-900 dark:text-white font-geist-b text-lg">₹{total.toLocaleString()}</Text>
+                <Text className="text-gray-900 dark:text-white font-geist-b text-lg">{formatAmount(total)}</Text>
                 <Text className="text-gray-400 font-geist-md text-[10px] uppercase">Total Spent</Text>
             </View>
         </View>
@@ -94,6 +101,7 @@ const DonutChart = ({ data, size = 220, strokeWidth = 25, total, selectedCategor
 export default function Analytics() {
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
+    const { currency, formatAmount } = useCurrency();
     const [timeRange, setTimeRange] = useState<"all" | "thismonth" | "lastmonth">("thismonth");
     const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
     const [showRangeDropdown, setShowRangeDropdown] = useState(false);
@@ -141,6 +149,33 @@ export default function Analytics() {
             const res = await budgetsAPI.getAll();
             return res.data;
         }
+    });
+    
+    const { data: emis } = useQuery({
+        queryKey: ["emis"],
+        queryFn: async () => {
+            const res = await emisAPI.getAll();
+            return res.data;
+        }
+    });
+
+    const { data: envelopes } = useQuery({
+        queryKey: ["envelopes"],
+        queryFn: async () => {
+            const res = await envelopesAPI.getAll();
+            return res.data;
+        }
+    });
+
+    const { data: prevSummary } = useQuery<SummaryResponse>({
+        queryKey: ["summary", "lastmonth_essential"],
+        queryFn: async () => {
+            const now = new Date();
+            const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const end = new Date(now.getFullYear(), now.getMonth(), 0);
+            const res = await transactionsAPI.getSummary({ startDate: start.toISOString(), endDate: end.toISOString() });
+            return res.data;
+        },
     });
 
     // Generate Dynamic AI Insights
@@ -211,6 +246,68 @@ export default function Analytics() {
     const categoryTransactions = topCategory && allTransactionsData 
         ? allTransactionsData.transactions.filter(t => t.category === topCategory.name)
         : [];
+
+    // --- Stability Index Logic ---
+    const stabilityMetrics = useMemo(() => {
+        if (!emis || !envelopes || !budgetsData || !summary) return null;
+
+        const essentialCategories = ["Rent", "Bills", "Health", "Transport", "Food"];
+        const monthlyEssentials = budgetsData
+            .filter(b => essentialCategories.includes(b.category))
+            .reduce((sum, b) => sum + b.amount, 0);
+
+        const totalMonthlyEMI = emis
+            .filter(e => !e.isDone)
+            .reduce((sum, e) => sum + e.monthlyAmount, 0);
+
+        const totalFixedObligations = monthlyEssentials + totalMonthlyEMI;
+        
+        const totalBuffer = envelopes.reduce((sum, e) => sum + (e.budget - e.spent), 0);
+        
+        const runwayMonths = totalFixedObligations > 0 ? (totalBuffer / totalFixedObligations).toFixed(1) : "Ø";
+        
+        // Resilience Score: (Runway / 6 months goal) * 100 - (Debt Ratio penalty)
+        const income = summary.totalIncome || 1; // avoid divide by zero
+        const debtRatio = (totalMonthlyEMI / income) * 100;
+        
+        let score = Math.min(100, (parseFloat(runwayMonths) / 6) * 100);
+        // Penalty for debt ratio > 30%
+        if (debtRatio > 30) score -= (debtRatio - 30);
+        score = Math.max(0, Math.round(score));
+
+        return {
+            score,
+            runwayMonths,
+            totalBuffer,
+            totalFixedObligations,
+            debtRatio: debtRatio.toFixed(0)
+        };
+    }, [emis, envelopes, budgetsData, summary]);
+
+    const inflationPulse = useMemo(() => {
+        if (!summary || !prevSummary) return null;
+
+        const essentialCategories = ["Rent", "Bills", "Health", "Transport", "Food"];
+        
+        const currentEssentials = (summary.categoryBreakdown || [])
+            .filter(c => essentialCategories.includes(c.name))
+            .reduce((sum, c) => sum + c.totalSpent, 0);
+
+        const prevEssentials = (prevSummary.categoryBreakdown || [])
+            .filter(c => essentialCategories.includes(c.name))
+            .reduce((sum, c) => sum + c.totalSpent, 0);
+
+        const tax = currentEssentials - prevEssentials;
+        const percentage = prevEssentials > 0 ? ((tax / prevEssentials) * 100).toFixed(0) : "0";
+        const suggestedAdjustment = Math.round(currentEssentials * 0.10); // Suggest 10% increase if surge detected
+
+        return {
+            tax,
+            percentage,
+            isSurge: tax > 0,
+            suggestedAdjustment
+        };
+    }, [summary, prevSummary]);
 
     return (
         <ScrollView 
@@ -337,7 +434,7 @@ export default function Analytics() {
                                             labels={processedChartData.labels}
                                             datasets={processedChartData.datasets}
                                             isDark={isDark}
-                                            unit="₹"
+                                            unit={currency.symbol}
                                         />
                                     </View>
                                 </View>
@@ -374,15 +471,15 @@ export default function Analytics() {
                                             <View className="flex-row justify-between mb-6">
                                                 <View>
                                                     <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Total</Text>
-                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-base">₹{topCategory.totalSpent.toLocaleString()}</Text>
+                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-base">{formatAmount(topCategory.totalSpent)}</Text>
                                                 </View>
                                                 <View>
                                                     <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Average</Text>
-                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-base">₹{Math.floor(topCategory.totalSpent / (topCategory.count || 1))}</Text>
+                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-base">{formatAmount(Math.floor(topCategory.totalSpent / (topCategory.count || 1)))}</Text>
                                                 </View>
                                                 <View>
                                                     <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Budget</Text>
-                                                    <Text className="text-emerald-500 font-geist-b text-base">₹{budget.toLocaleString()}</Text>
+                                                    <Text className="text-emerald-500 font-geist-b text-base">{formatAmount(budget)}</Text>
                                                 </View>
                                             </View>
 
@@ -390,7 +487,7 @@ export default function Analytics() {
                                             {budget > 0 && (
                                                 <View className="mb-6">
                                                     <View className="flex-row justify-between mb-2">
-                                                        <Text className="text-emerald-500 font-geist-sb text-xs">₹{remaining.toLocaleString()} remaining</Text>
+                                                        <Text className="text-emerald-500 font-geist-sb text-xs">{formatAmount(remaining)} remaining</Text>
                                                         <Text className="text-gray-400 font-geist-sb text-xs">{budgetPercentage}%</Text>
                                                     </View>
                                                     <View className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -468,7 +565,7 @@ export default function Analytics() {
                                                                         )}
                                                                     </View>
                                                                     <Text className="text-red-500 font-geist-b text-sm">
-                                                                        -₹{t.amount.toLocaleString("en-IN")}
+                                                                        -{formatAmount(t.amount)}
                                                                     </Text>
                                                                 </View>
                                                             );
@@ -480,6 +577,122 @@ export default function Analytics() {
                                                 )}
                                             </View>
                                         </View>
+                                    )}
+                                </View>
+
+                                {/* Inflation Pulse Section */}
+                                {inflationPulse && inflationPulse.isSurge && (
+                                    <View className="mt-0 bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-gray-50 dark:border-slate-800">
+                                        <View className="flex-row items-center justify-between mb-6">
+                                            <View className="flex-row items-center">
+                                                <View>
+                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-[20px]">Inflation Pulse</Text>
+                                                    <Text className="text-gray-400 text-sm font-geist-md">Purchasing Power Surge</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+
+                                        <View className="flex-row items-center justify-between mb-8">
+                                            <View className="flex-1">
+                                                <View className="flex-row items-baseline mb-1">
+                                                    <Text className="text-red-500 text-4xl font-geist-b">+{inflationPulse.percentage}%</Text>
+                                                </View>
+                                                <Text className="text-gray-400 text-sm font-geist-md">Cost Surge</Text>
+                                            </View>
+                                            <View className="w-16 h-16 rounded-full dark:border-slate-800 items-center justify-center">
+                                                <Flame size={28} color="#ef4444" />
+                                            </View>
+                                        </View>
+
+                                        {/* Metrics Row */}
+                                        <View className="flex-row justify-between mb-4 bg-gray-50 dark:bg-slate-800/50 p-5 pt-4 pb-4 rounded-2xl border border-gray-100 dark:border-slate-800">
+                                            <View className="items-center flex-1">
+                                                <Text className="text-gray-400 text-[9px] font-geist-sb uppercase mb-1">Surge</Text>
+                                                <Text className="text-red-600 dark:text-red-400 font-geist-b text-base">{formatAmount(inflationPulse.tax)}</Text>
+                                            </View>
+                                            <View className="items-center border-x border-gray-200 dark:border-slate-700 px-6 flex-1">
+                                                <Text className="text-gray-400 text-[9px] font-geist-sb uppercase mb-1">Impact</Text>
+                                                <Text className="text-gray-900 dark:text-white font-geist-b text-base">Monthly</Text>
+                                            </View>
+                                            <View className="items-center flex-1">
+                                                <Text className="text-gray-400 text-[9px] font-geist-sb uppercase mb-1">Advice</Text>
+                                                <Text className="text-emerald-600 font-geist-b text-base">Adjust</Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Insight Box */}
+                                        <View className="bg-orange-50/50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-100 dark:border-orange-900/30">
+                                            <View className="flex-row items-center mb-2">
+                                                <TrendingUp size={14} color="#FF6A00" />
+                                                <Text className="text-[#FF6A00] font-geist-sb text-xs ml-2 uppercase tracking-tight">Beat the Surge</Text>
+                                            </View>
+                                            <Text className="text-gray-700 dark:text-orange-200/80 font-geist-md text-xs leading-5">
+                                                Your essential basket costs {formatAmount(inflationPulse.tax)} more than last month. 
+                                                Increase your <Text className="text-gray-900 dark:text-white font-geist-sb">Emergency Envelope</Text> by <Text className="text-emerald-500 font-geist-b">{formatAmount(inflationPulse.suggestedAdjustment)}</Text> to keep up.
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
+
+                                {/* Stability Index Section */}
+                                <View className="mt-8 bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-sm border border-gray-50 dark:border-slate-800">
+                                    <View className="flex-row items-center justify-between mb-6">
+                                        <View className="flex-row items-center">
+                                            <View>
+                                                <Text className="text-gray-900 dark:text-white font-geist-b text-[20px]">Stability Index</Text>
+                                                <Text className="text-gray-400 text-sm font-geist-md">Survival timeline on crisis</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    {stabilityMetrics ? (
+                                        <>
+                                            <View className="flex-row items-center justify-between mb-8">
+                                                <View className="flex-1">
+                                                    <View className="flex-row items-baseline mb-1">
+                                                        <Text className="text-gray-900 dark:text-white text-4xl font-geist-b">{stabilityMetrics.score}</Text>
+                                                        <Text className="text-gray-400 text-lg font-geist-sb ml-1">/100</Text>
+                                                    </View>
+                                                    <Text className="text-gray-400 text-sm font-geist-md">Resilience Score</Text>
+                                                </View>
+                                                <View className="w-16 h-16 rounded-full dark:border-slate-800 items-center justify-center">
+                                                    <Activity size={28} color={stabilityMetrics.score > 70 ? "#10b981" : stabilityMetrics.score > 40 ? "#FF6A00" : "#ef4444"} />
+                                                </View>
+                                            </View>
+
+                                            {/* Metrics Row */}
+                                            <View className="flex-row justify-between mb-4 bg-gray-50 dark:bg-slate-800/50 p-5 pt-4 pb-4 rounded-2xl border border-gray-100 dark:border-slate-800">
+                                                <View className="items-center">
+                                                    <Text className="text-gray-400 text-[9px] font-geist-sb uppercase mb-1">Runway</Text>
+                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-base">{stabilityMetrics.runwayMonths} Mo</Text>
+                                                </View>
+                                                <View className="items-center border-x border-gray-200 dark:border-slate-700 px-6">
+                                                    <Text className="text-gray-400 text-[9px] font-geist-sb uppercase mb-1">Buffer</Text>
+                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-base">{formatAmount(stabilityMetrics.totalBuffer)}</Text>
+                                                </View>
+                                                <View className="items-center">
+                                                    <Text className="text-gray-400 text-[9px] font-geist-sb uppercase mb-1">Debt Ratio</Text>
+                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-base">{stabilityMetrics.debtRatio}%</Text>
+                                                </View>
+                                            </View>
+
+                                            {/* Actionable Insight */}
+                                            <View className="bg-orange-50/50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-100 dark:border-orange-900/30">
+                                                <View className="flex-row items-center mb-2">
+                                                    <Shield size={14} color="#FF6A00" />
+                                                    <Text className="text-[#FF6A00] font-geist-sb text-xs ml-2 uppercase tracking-tight">Need of the Hour</Text>
+                                                </View>
+                                                <Text className="text-gray-700 dark:text-orange-200/80 font-geist-md text-xs leading-5">
+                                                    {stabilityMetrics.score > 70 
+                                                        ? "Your financial shell is robust. Consider moving excess buffer into investments to hedge against inflation."
+                                                        : stabilityMetrics.score > 40
+                                                        ? "Modern crises demand a 6-month buffer. You are halfway there; prioritize essential envelopes this month."
+                                                        : "High debt ratio and low buffer detected. In a crisis, liquidity is king. Minimize discretionary spends."}
+                                                </Text>
+                                            </View>
+                                        </>
+                                    ) : (
+                                        <ActivityIndicator color="#FF6A00" />
                                     )}
                                 </View>
                             </>

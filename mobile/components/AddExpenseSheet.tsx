@@ -41,6 +41,9 @@ import {
     Goal
 } from "lucide-react-native";
 
+import { StreakCelebration } from "./StreakCelebration";
+import { useCurrency } from "../providers/CurrencyProvider";
+
 const AVATARS = [
     require('../assets/friend.png'),
     require('../assets/friend2.png'),
@@ -86,6 +89,7 @@ const QUICK_CATEGORIES = [
 const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
     ({ onClose, onSMSPress, onUpgrade, smsData, initialData }, ref) => {
         const queryClient = useQueryClient();
+        const { currency } = useCurrency();
         const snapPoints = useMemo(() => ["92%"], []);
 
         // Form state
@@ -102,6 +106,8 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         const [isSplit, setIsSplit] = useState(false);
         const [date] = useState(new Date());
         const [scannedImage, setScannedImage] = useState<string | null>(null);
+        const [reachedMilestone, setReachedMilestone] = useState<any | null>(null);
+        const [currentStreakAfterTransaction, setCurrentStreakAfterTransaction] = useState<number>(0);
 
         // Split state
         const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
@@ -184,7 +190,10 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
 
         const createMutation = useMutation({
             mutationFn: (data: CreateTransactionData) => transactionsAPI.create(data),
-            onSuccess: (_, variables) => {
+            onSuccess: (res, variables) => {
+                const responseData = res.data;
+                const newMilestone = responseData?.newMilestone;
+
                 // If linked to envelope, manually update its spent amount
                 if (selectedEnvelopeId && variables.amount && variables.type === "EXPENSE") {
                     const env = activeEnvelopes.find(e => e.id === selectedEnvelopeId);
@@ -197,9 +206,18 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
 
                 queryClient.invalidateQueries({ queryKey: ["transactions"] });
                 queryClient.invalidateQueries({ queryKey: ["summary"] });
+                queryClient.invalidateQueries({ queryKey: ["streak"] });
+                
                 resetForm();
-                Alert.alert("Success", "Transaction added!");
-                onClose();
+
+                if (newMilestone) {
+                    setCurrentStreakAfterTransaction(newMilestone.days);
+                    setReachedMilestone(newMilestone);
+                    // We don't call onClose() yet, let the celebration handle it
+                } else {
+                    Alert.alert("Success", "Transaction added!");
+                    onClose();
+                }
             },
             onError: (error: any) => {
                 if (error.response?.status === 403) {
@@ -265,7 +283,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                     const amountStr = splitType === "EQUALLY" 
                         ? (total / (selectedFriends.length + 1)).toFixed(2)
                         : manualAmounts[id] || "0";
-                    return `${friend?.name}: ₹${amountStr}`;
+                    return `${friend?.name}: ${currency.symbol}${amountStr}`;
                 }).join(", ");
                 
                 mutationData.notes = (mutationData.notes ? `${mutationData.notes} | ` : "") + `Split: ${splitInfo}`;
@@ -514,7 +532,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                     <View className="mx-5 bg-white rounded-2xl p-5 mb-4 border border-gray-100 shadow-sm">
                         <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-3">Amount</Text>
                         <View className="flex-row items-center">
-                            <Text className="text-[#FF6A00] text-3xl font-geist-b mr-1">₹</Text>
+                            <Text className="text-[#FF6A00] text-3xl font-geist-b mr-1">{currency.symbol}</Text>
                             <TextInput
                                 className="flex-1 text-gray-900 text-3xl font-geist-b"
                                 placeholder="0"
@@ -614,7 +632,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                             {selectedEnvelopeId !== null && (
                                 <View className="mx-5 bg-white rounded-2xl p-5 mb-4 border border-gray-100 shadow-sm">
                                     <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-4">Select Target Goal</Text>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                                    <View className="flex-row flex-wrap gap-x-4 gap-y-4">
                                         {activeEnvelopes.map(env => {
                                             const isSelected = selectedEnvelopeId === env.id;
                                             return (
@@ -632,7 +650,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                                 </TouchableOpacity>
                                             );
                                         })}
-                                    </ScrollView>
+                                    </View>
                                 </View>
                             )}
                         </>
@@ -657,9 +675,9 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                         <View className="mx-5 bg-white rounded-2xl p-5 mb-4 border border-gray-100 shadow-sm">
                             <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-4">Select Friends</Text>
                             
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                            <View className="flex-row flex-wrap gap-x-4 gap-y-4">
                                 <TouchableOpacity 
-                                    className="items-center mr-4"
+                                    className="items-center mr-2"
                                     onPress={() => setAddFriendModalVisible(true)}
                                 >
                                     <View className="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 border-dashed items-center justify-center mb-1">
@@ -680,7 +698,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                                     setSelectedFriends([...selectedFriends, friend.id]);
                                                 }
                                             }}
-                                            className="items-center mr-4"
+                                            className="items-center mr-3"
                                         >
                                             <View className={`w-12 h-12 rounded-full overflow-hidden border-2 ${isSelected ? 'border-[#FF6A00]' : 'border-transparent'}`}>
                                                 <Image source={friend.avatar} className="w-full h-full" />
@@ -691,7 +709,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                         </TouchableOpacity>
                                     );
                                 })}
-                            </ScrollView>
+                            </View>
 
                                 {selectedFriends.length > 0 && (
                                     <View className="border-t border-gray-50 pt-5">
@@ -741,7 +759,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                         {splitType === "EQUALLY" ? (
                                             <View className="rounded-xl p-0">
                                                 <Text className="text-[#FF6A00] text-base font-geist-md text-center">
-                                                    Each person pays ₹{(parseFloat(amount || "0") / (selectedFriends.length + 1)).toFixed(2)}
+                                                    Each person pays {currency.symbol}{(parseFloat(amount || "0") / (selectedFriends.length + 1)).toFixed(2)}
                                                 </Text>
                                             </View>
                                         ) : (
@@ -752,7 +770,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                                         <View key={id} className="flex-row items-center justify-between bg-gray-50 p-1 rounded-2xl border border-gray-100 mb-1.5">
                                                             <Text className="text-gray-700 text-sm font-geist-md ml-2">{friend?.name}</Text>
                                                             <View className="flex-row items-center">
-                                                                <Text className="text-gray-400 text-base mr-1">₹</Text>
+                                                                <Text className="text-gray-400 text-base mr-1">{currency.symbol}</Text>
                                                                 <TextInput
                                                                     placeholder="0"
                                                                     className="text-gray-900 font-geist-sb text-base min-w-[0px] text-right mr-1"
@@ -774,7 +792,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                     {/* Quick Category Chips */}
                     <View className="mx-5 bg-white rounded-2xl p-4 mb-4 border border-gray-100 shadow-sm">
                         <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-4">Quick Category</Text>
-                        <View className="flex-row flex-wrap justify-between gap-y-5 px-1">
+                        <View className="flex-row flex-wrap justify-start gap-y-5 gap-x-15 px-1">
                             {QUICK_CATEGORIES.map((cat) => {
                                 const isSelected = selectedCategory === cat.name;
                                 const Icon = cat.icon;
@@ -783,7 +801,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                         key={cat.name}
                                         onPress={() => setSelectedCategory(isSelected ? null : cat.name)}
                                         className="items-center"
-                                        style={{ width: '22%' }}
+                                        style={{ width: '20%' }}
                                     >
                                         <View 
                                             className={`w-14 h-14 rounded-full items-center justify-center mb-1.5 border-2 ${isSelected ? 'border-[#FF6A00]' : 'border-transparent'}`}
@@ -833,6 +851,16 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                     </View>
                 </BottomSheetScrollView>
             </BottomSheet>
+
+            <StreakCelebration 
+                isVisible={!!reachedMilestone}
+                milestone={reachedMilestone}
+                currentStreak={currentStreakAfterTransaction}
+                onClose={() => {
+                    setReachedMilestone(null);
+                    onClose();
+                }}
+            />
 
             {/* Add Friend - Native Modal (Mimicking Paste SMS Sheet) */}
             <Modal

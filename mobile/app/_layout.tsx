@@ -18,6 +18,7 @@ function StatusBarWrapper() {
 
 import { SheetProvider } from "../providers/sheet-provider";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { CurrencyProvider } from "../providers/CurrencyProvider";
 
 export default function RootLayout() {
     const [fontsLoaded] = useFonts({
@@ -41,14 +42,16 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <BottomSheetModalProvider>
                 <AuthProvider>
-                    <QueryProvider>
-                        <ThemeProvider>
-                            <SheetProvider>
-                                <StatusBarWrapper />
-                                <Stack screenOptions={{ headerShown: false }} />
-                            </SheetProvider>
-                        </ThemeProvider>
-                    </QueryProvider>
+                    <CurrencyProvider>
+                        <QueryProvider>
+                            <ThemeProvider>
+                                <SheetProvider>
+                                    <StatusBarWrapper />
+                                    <Stack screenOptions={{ headerShown: false }} />
+                                </SheetProvider>
+                            </ThemeProvider>
+                        </QueryProvider>
+                    </CurrencyProvider>
                 </AuthProvider>
             </BottomSheetModalProvider>
         </GestureHandlerRootView>

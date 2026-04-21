@@ -25,6 +25,7 @@ import BottomSheet from "@gorhom/bottom-sheet";
 import { BudgetSheet } from "../../components/BudgetSheet";
 import SkeletonLoader from "../../components/SkeletonLoader";
 import { TransactionItem } from "../../components/TransactionItem";
+import { useCurrency } from "../../providers/CurrencyProvider";
 
 // --- Helper: Grouping Logic ---
 const groupTransactions = (transactions: Transaction[]) => {
@@ -83,6 +84,7 @@ export default function Transactions() {
     const budgetSheetRef = useRef<BottomSheet>(null);
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
+    const { currency } = useCurrency();
     const [filter, setFilter] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
     const [search, setSearch] = useState("");
     const [isSearchActive, setIsSearchActive] = useState(false);
@@ -362,7 +364,7 @@ export default function Transactions() {
                                 <Text className="text-gray-400 font-geist-b text-[13px] tracking-widest">{month}</Text>
                                 <View className="flex-row items-center">
                                     <Text className="text-gray-400 font-geist-b text-[13px] mr-1">
-                                        ₹{Math.abs(monthInfo.total).toLocaleString("en-IN")}
+                                        {currency.symbol}{Math.abs(monthInfo.total).toLocaleString("en-IN")}
                                     </Text>
                                 </View>
                             </View>
@@ -374,7 +376,7 @@ export default function Transactions() {
                                     <View className="flex-row items-center justify-between px-6 mb-2">
                                         <Text className="text-gray-400 font-geist-md text-[13px]">{day}</Text>
                                         <Text className="text-gray-400 font-geist-md text-[13px]">
-                                            ₹{Math.abs(dayInfo.total).toLocaleString("en-IN")}
+                                            {currency.symbol}{Math.abs(dayInfo.total).toLocaleString("en-IN")}
                                         </Text>
                                     </View>
 

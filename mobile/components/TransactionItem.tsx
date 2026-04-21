@@ -9,6 +9,7 @@ import {
 import { Swipeable } from "react-native-gesture-handler";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { transactionsAPI } from "../services/api";
+import { useCurrency } from "../providers/CurrencyProvider";
 
 const AVATARS = [
     require('../assets/friend.png'),
@@ -69,6 +70,7 @@ const getAvatarForName = (name: string) => {
 export function TransactionItem({ item, onDelete, isExpired, showSwipe = false, remainingBudget }: TransactionItemProps) {
     const [showBreakdown, setShowBreakdown] = useState(false);
     const queryClient = useQueryClient();
+    const { currency, formatAmount } = useCurrency();
     const isIncome = item.type === "INCOME";
     const CategoryIcon = CATEGORY_ICONS[item.category || "Other"] || MoreHorizontal;
 
@@ -110,7 +112,7 @@ export function TransactionItem({ item, onDelete, isExpired, showSwipe = false, 
             const amountStr = parts[1]?.trim() || "0";
             return { 
                 name, 
-                amount: parseFloat(amountStr.replace('₹', '').replace(/,/g, '')) || 0,
+                amount: parseFloat(amountStr.replace(/[^0-9.]/g, '')) || 0,
                 avatar: getAvatarForName(name)
             };
         });
@@ -183,8 +185,8 @@ export function TransactionItem({ item, onDelete, isExpired, showSwipe = false, 
                 {!isIncome && remainingBudget !== undefined && (
                     <Text className={`text-[10px] font-geist-md mt-0.5 ${remainingBudget < 0 ? "text-red-500" : "text-emerald-600"}`}>
                         {remainingBudget < 0 
-                            ? `Exceeded ${item.category} budget by ₹${Math.abs(remainingBudget).toLocaleString("en-IN")}`
-                            : `₹${remainingBudget.toLocaleString("en-IN")} left in ${item.category} budget`}
+                            ? `Exceeded ${item.category} budget by ${formatAmount(Math.abs(remainingBudget))}`
+                            : `${formatAmount(remainingBudget)} left in ${item.category} budget`}
                     </Text>
                 )}
 
@@ -206,7 +208,7 @@ export function TransactionItem({ item, onDelete, isExpired, showSwipe = false, 
             </View>
             <View className="items-end">
                 <Text className={`font-geist-b text-[17px] ${isIncome ? "text-emerald-500" : "text-red-500"}`}>
-                    {isIncome ? "+" : "-"}₹{item.amount.toLocaleString("en-IN")}
+                    {isIncome ? "+" : "-"}{formatAmount(item.amount)}
                 </Text>
             </View>
         </TouchableOpacity>
@@ -249,11 +251,11 @@ export function TransactionItem({ item, onDelete, isExpired, showSwipe = false, 
                                     <View className="flex-row justify-between mb-4">
                                         <View>
                                             <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-1">Total Paid</Text>
-                                            <Text className="text-gray-900 text-xl font-geist-b">₹{item.amount.toLocaleString("en-IN")}</Text>
+                                            <Text className="text-gray-900 text-xl font-geist-b">{formatAmount(item.amount)}</Text>
                                         </View>
                                         <View className="items-end">
                                             <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-1">Your Share</Text>
-                                            <Text className="text-emerald-600 text-xl font-geist-b">₹{yourShare.toLocaleString("en-IN")}</Text>
+                                            <Text className="text-emerald-600 text-xl font-geist-b">{formatAmount(yourShare)}</Text>
                                         </View>
                                     </View>
                                     <View className="bg-white rounded-full p-4 border border-orange-100 flex-row items-center justify-between">
@@ -263,7 +265,7 @@ export function TransactionItem({ item, onDelete, isExpired, showSwipe = false, 
                                             </View>
                                             <Text className="text-gray-700 font-geist-sb text-sm">Owed to You</Text>
                                         </View>
-                                        <Text className="text-[#FF6A00] text-lg font-geist-b">₹{totalOwed.toLocaleString("en-IN")}</Text>
+                                        <Text className="text-[#FF6A00] text-lg font-geist-b">{formatAmount(totalOwed)}</Text>
                                     </View>
                                 </View>
 
@@ -279,7 +281,7 @@ export function TransactionItem({ item, onDelete, isExpired, showSwipe = false, 
                                                 </View>
                                                 <View className="flex-row items-center">
                                                     <Text className="text-gray-400 text-xs mr-2">pays you</Text>
-                                                    <Text className="text-gray-900 font-geist-b text-base">₹{f.amount.toLocaleString("en-IN")}</Text>
+                                                    <Text className="text-gray-900 font-geist-b text-base">{formatAmount(f.amount)}</Text>
                                                 </View>
                                             </View>
                                         ))}

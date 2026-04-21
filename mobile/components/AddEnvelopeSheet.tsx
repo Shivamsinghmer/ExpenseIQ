@@ -20,6 +20,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { envelopesAPI } from "../services/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
+import { useCurrency } from "../providers/CurrencyProvider";
+
 interface AddEnvelopeSheetProps {
     onClose: () => void;
 }
@@ -28,6 +30,7 @@ const PRESET_EMOJIS = ["💰", "🛍️", "🍽️", "✈️", "🚗", "🏠", "
 
 const AddEnvelopeSheet = forwardRef<BottomSheet, AddEnvelopeSheetProps>(({ onClose }, ref) => {
     const queryClient = useQueryClient();
+    const { currency } = useCurrency();
     const snapPoints = React.useMemo(() => ["85%"], []);
 
     const [title, setTitle] = useState("");
@@ -121,7 +124,7 @@ const AddEnvelopeSheet = forwardRef<BottomSheet, AddEnvelopeSheetProps>(({ onClo
                     <View>
                         <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-2">Budget Amount</Text>
                         <View className="flex-row items-center bg-gray-50 rounded-2xl px-4 py-3 h-12">
-                            <Text className="text-gray-400 font-geist-sb mr-2">₹</Text>
+                            <Text className="text-gray-400 font-geist-sb mr-2">{currency.symbol}</Text>
                             <TextInput
                                 className="flex-1 text-gray-900 font-geist-sb text-lg h-12"
                                 placeholder="0.00"

@@ -4,6 +4,7 @@ import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetTex
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Check, Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon, Zap, HeartPulse, Plane, Gamepad2, GraduationCap, Gift, TrendingUp, Wallet, MoreHorizontal } from "lucide-react-native";
 import { budgetsAPI } from "../services/api";
+import { useCurrency } from "../providers/CurrencyProvider";
 
 const CATEGORIES = [
     { name: "Food", icon: Utensils, color: "#FF6B6B" },
@@ -24,6 +25,7 @@ const CATEGORIES = [
 
 export const BudgetSheet = forwardRef<BottomSheet, { onClose: () => void, onChange?: (index: number) => void }>(({ onClose, onChange }, ref) => {
     const queryClient = useQueryClient();
+    const { currency } = useCurrency();
     const snapPoints = useMemo(() => ["85%"], []);
 
     const { data: budgetsData, isLoading } = useQuery({
@@ -117,7 +119,7 @@ export const BudgetSheet = forwardRef<BottomSheet, { onClose: () => void, onChan
                                     <Text className="text-gray-900 font-geist-sb text-base">{cat.name}</Text>
                                 </View>
                                 <View className="flex-row items-center justify-end flex-1 max-w-[120px]">
-                                    <Text className="text-gray-400 font-geist-md mr-1">₹</Text>
+                                    <Text className="text-gray-400 font-geist-md mr-1">{currency.symbol}</Text>
                                     <BottomSheetTextInput
                                         className="font-geist-b text-gray-900 text-right w-full"
                                         placeholder="0"

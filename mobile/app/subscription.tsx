@@ -22,6 +22,26 @@ import {
     CFThemeBuilder,
     CFEnvironment
 } from "cashfree-pg-api-contract";
+import { useCurrency } from "../providers/CurrencyProvider";
+
+const PLAN_PRICES: any = {
+    monthly: {
+        INR: 100,
+        USD: 1.49,
+        EUR: 1.39,
+        GBP: 1.19,
+        JPY: 200,
+        AED: 5.99
+    },
+    annual: {
+        INR: 1020,
+        USD: 14.99,
+        EUR: 13.99,
+        GBP: 11.99,
+        JPY: 2000,
+        AED: 54.99
+    }
+};
 
 const { width } = Dimensions.get("window");
 
@@ -38,6 +58,7 @@ export default function SubscriptionScreen() {
     const planTriggerRef = useRef<View>(null);
     const [trialEndDate, setTrialEndDate] = useState<string | null>(null);
     const { getToken } = useAuth();
+    const { currency } = useCurrency();
 
     const handleBack = () => {
         if (router.canGoBack()) {
@@ -111,7 +132,8 @@ export default function SubscriptionScreen() {
     const handleUpgrade = async () => {
         try {
             setLoading(true);
-            const amount = selectedPlan === 'monthly' ? 50 : 500;
+            const currencyCode = currency.code as keyof typeof PLAN_PRICES.monthly;
+            const amount = PLAN_PRICES[selectedPlan][currencyCode] || (selectedPlan === 'monthly' ? 100 : 1020);
             const response = await paymentsAPI.createOrder(amount);
             const { payment_session_id, order_id, environment } = response.data;
             const cfEnv = environment === "PRODUCTION" ? CFEnvironment.PRODUCTION : CFEnvironment.SANDBOX;
@@ -251,8 +273,8 @@ export default function SubscriptionScreen() {
                                                 className="bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl border border-gray-100 dark:border-slate-800 p-1 z-[999]"
                                             >
                                                 {[
-                                                    { label: "Monthly Billing", value: "monthly", sub: "₹100 / month" },
-                                                    { label: "Annual Billing", value: "annual", sub: "₹1020 / year • Save 15%", highlight: true }
+                                                    { label: "Monthly Billing", value: "monthly", sub: `${currency.symbol}${PLAN_PRICES.monthly[currency.code] || 100} / month` },
+                                                    { label: "Annual Billing", value: "annual", sub: `${currency.symbol}${PLAN_PRICES.annual[currency.code] || 1020} / year • Save 15%`, highlight: true }
                                                 ].map((p) => (
                                                     <TouchableOpacity
                                                         key={p.value}
@@ -281,7 +303,7 @@ export default function SubscriptionScreen() {
                         <View className="items-center mb-8">
                             <View className="flex-row items-baseline">
                                 <Text className="text-gray-900 text-6xl font-geist-b">
-                                    {selectedPlan === 'monthly' ? '₹100' : '₹1020'}
+                                    {currency.symbol}{PLAN_PRICES[selectedPlan][currency.code] || (selectedPlan === 'monthly' ? '100' : '1020')}
                                 </Text>
                                 <Text className="text-gray-500 ml-2 text-lg font-geist-md">
                                     {selectedPlan === 'monthly' ? '/ month' : '/ year'}

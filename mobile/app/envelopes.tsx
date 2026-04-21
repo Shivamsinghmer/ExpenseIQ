@@ -23,10 +23,12 @@ import { envelopesAPI } from "../services/api";
 import AddEnvelopeSheet from "../components/AddEnvelopeSheet";
 import BottomSheet from "@gorhom/bottom-sheet";
 import SkeletonLoader from "../components/SkeletonLoader";
+import { useCurrency } from "../providers/CurrencyProvider";
 
 export default function BudgetEnvelopes() {
     const router = useRouter();
     const envelopeSheetRef = useRef<BottomSheet>(null);
+    const { currency } = useCurrency();
 
     const { data: envelopes, isLoading } = useQuery({
         queryKey: ["envelopes"],
@@ -73,7 +75,7 @@ export default function BudgetEnvelopes() {
                     <View className="flex-row justify-between items-start mb-6">
                         <View>
                             <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-1">Total Envelope Budgets</Text>
-                            <Text className="text-gray-900 text-3xl font-geist-b">₹{totalBudget.toLocaleString()}</Text>
+                            <Text className="text-gray-900 text-3xl font-geist-b">{currency.symbol}{totalBudget.toLocaleString()}</Text>
                         </View>
                         <View className="items-end">
                             <Text className="text-gray-900 text-xl font-geist-b">{activeCount}</Text>
@@ -86,11 +88,11 @@ export default function BudgetEnvelopes() {
                     <View className="flex-row items-center justify-between">
                         <View className="flex-1 border-r border-gray-100">
                             <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Spent</Text>
-                            <Text className="text-red-500 font-geist-b text-lg">₹{totalSpent.toLocaleString()}</Text>
+                            <Text className="text-red-500 font-geist-b text-lg">{currency.symbol}{totalSpent.toLocaleString()}</Text>
                         </View>
                         <View className="flex-1 pl-6">
                             <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Remaining</Text>
-                            <Text className="text-green-500 font-geist-b text-lg">₹{totalRemaining.toLocaleString()}</Text>
+                            <Text className="text-green-500 font-geist-b text-lg">{currency.symbol}{totalRemaining.toLocaleString()}</Text>
                         </View>
                     </View>
                 </View>
@@ -132,15 +134,15 @@ export default function BudgetEnvelopes() {
                             <View className="flex-row items-center justify-between">
                                 <View className="items-center">
                                     <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Spent</Text>
-                                    <Text className="text-gray-900 font-geist-b text-sm">₹{envelope.spent.toLocaleString()}</Text>
+                                    <Text className="text-gray-900 font-geist-b text-sm">{currency.symbol}{envelope.spent.toLocaleString()}</Text>
                                 </View>
                                 <View className="items-center">
                                     <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Budget</Text>
-                                    <Text className="text-gray-900 font-geist-b text-sm">₹{envelope.budget.toLocaleString()}</Text>
+                                    <Text className="text-gray-900 font-geist-b text-sm">{currency.symbol}{envelope.budget.toLocaleString()}</Text>
                                 </View>
                                 <View className="items-center">
                                     <Text className="text-gray-400 text-[10px] font-geist-sb uppercase mb-1">Left</Text>
-                                    <Text className="text-green-600 font-geist-b text-sm">₹{left.toLocaleString()}</Text>
+                                    <Text className="text-green-600 font-geist-b text-sm">{currency.symbol}{left.toLocaleString()}</Text>
                                 </View>
                             </View>
                         </View>

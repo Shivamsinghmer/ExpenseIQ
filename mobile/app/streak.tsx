@@ -15,12 +15,16 @@ import { useRouter } from "expo-router";
 import { 
     ChevronLeft, Flame, Trophy, Calendar, Leaf, 
     Star, Diamond, Crown, TreeDeciduous, Sprout,
+    Award,
+    Medal,
 } from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
 import { streaksAPI } from "../services/api";
 import LottieView from "lottie-react-native";
 
-const { width, height } = Dimensions.get("window");
+import { StreakCelebration } from "../components/StreakCelebration";
+
+const { width } = Dimensions.get("window");
 
 const MILESTONES = [
     { id: 1, days: 3, label: "Beginner", emoji: "🌱", color: "#94a3b8" },
@@ -33,76 +37,6 @@ const MILESTONES = [
     { id: 8, days: 250, label: "Master", emoji: "🏅", color: "#2563eb" },
     { id: 9, days: 365, label: "1 Year", emoji: "👑", color: "#f59e0b" },
 ];
-
-const CONFETTI_PIECES = ["🎉", "🎊", "✨", "⭐", "💫", "🌟", "🔥", "💥"];
-
-function ConfettiOverlay() {
-    const pieces = useRef(
-        Array.from({ length: 24 }, (_, i) => ({
-            id: i,
-            emoji: CONFETTI_PIECES[i % CONFETTI_PIECES.length],
-            left: Math.random() * (width - 30),
-            delay: Math.random() * 1200,
-            duration: 2000 + Math.random() * 1500,
-            anim: new Animated.Value(0),
-        }))
-    ).current;
-
-    React.useEffect(() => {
-        pieces.forEach(p => {
-            Animated.loop(
-                Animated.sequence([
-                    Animated.delay(p.delay),
-                    Animated.timing(p.anim, {
-                        toValue: 1,
-                        duration: p.duration,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(p.anim, {
-                        toValue: 0,
-                        duration: 0,
-                        useNativeDriver: true,
-                    }),
-                ])
-            ).start();
-        });
-    }, []);
-
-    return (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            {pieces.map(p => (
-                <Animated.Text
-                    key={p.id}
-                    style={{
-                        position: "absolute",
-                        left: p.left,
-                        fontSize: 20,
-                        opacity: p.anim.interpolate({
-                            inputRange: [0, 0.2, 0.8, 1],
-                            outputRange: [0, 1, 1, 0],
-                        }),
-                        transform: [
-                            {
-                                translateY: p.anim.interpolate({
-                                    inputRange: [0, 1],
-                                    outputRange: [-30, height * 0.9],
-                                }),
-                            },
-                            {
-                                rotate: p.anim.interpolate({
-                                    inputRange: [0, 1],
-                                    outputRange: ["0deg", `${Math.random() > 0.5 ? 360 : -360}deg`],
-                                }),
-                            },
-                        ],
-                    }}
-                >
-                    {p.emoji}
-                </Animated.Text>
-            ))}
-        </View>
-    );
-}
 
 function MonthlyCalendar({ activeDates }: { activeDates: string[] }) {
     const today = new Date();
@@ -177,39 +111,7 @@ export default function StreakScreen() {
         queryFn: () => streaksAPI.getStats().then(res => res.data),
     });
 
-    const [showTrophyOverlay, setShowTrophyOverlay] = useState(false);
-    const [showAchievementModal, setShowAchievementModal] = useState(false);
-    const [selectedMilestone, setSelectedMilestone] = useState<typeof MILESTONES[0] | null>(null);
-    const modalScale = useRef(new Animated.Value(0)).current;
-
-    const handleMilestonePress = useCallback((milestone: typeof MILESTONES[0]) => {
-        setSelectedMilestone(milestone);
-        setShowTrophyOverlay(true);
-
-        // After Lottie plays (~2s), transition to the modal
-        setTimeout(() => {
-            setShowTrophyOverlay(false);
-            setShowAchievementModal(true);
-            modalScale.setValue(0);
-            Animated.spring(modalScale, {
-                toValue: 1,
-                friction: 6,
-                tension: 80,
-                useNativeDriver: true,
-            }).start();
-        }, 2200);
-    }, []);
-
-    const closeModal = useCallback(() => {
-        Animated.timing(modalScale, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-        }).start(() => {
-            setShowAchievementModal(false);
-            setSelectedMilestone(null);
-        });
-    }, []);
+    const [celebratingMilestone, setCelebratingMilestone] = useState<typeof MILESTONES[0] | null>(null);
 
     if (isLoading) {
         return (
@@ -236,7 +138,12 @@ export default function StreakScreen() {
                     <ChevronLeft size={28} color="#1f2937" />
                 </TouchableOpacity>
                 <Text className="text-2xl font-geist-b text-gray-900">Streak</Text>
-                <View className="w-12" />
+                <TouchableOpacity 
+                    onPress={() => router.push("/leaderboard")}
+                    className="w-11 h-11 rounded-full bg-[#FF6A00] items-center justify-center border border-gray-100"
+                >
+                    <Medal size={19} color="#ffffff" />
+                </TouchableOpacity>
             </View>
 
             <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -290,7 +197,7 @@ export default function StreakScreen() {
                                 <TouchableOpacity 
                                     key={milestone.id}
                                     activeOpacity={isAchieved ? 0.7 : 1}
-                                    onPress={() => isAchieved && handleMilestonePress(milestone)}
+                                    onPress={() => isAchieved && setCelebratingMilestone(milestone)}
                                     style={{ width: itemWidth }}
                                     className={`mb-4 p-4 rounded-3xl items-center border ${isAchieved ? "bg-orange-50/20 border-orange-100" : "bg-white border-gray-100"}`}
                                 >
@@ -322,97 +229,12 @@ export default function StreakScreen() {
                 <View className="h-10" />
             </ScrollView>
 
-            {/* Trophy Lottie Overlay */}
-            {showTrophyOverlay && (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.0)", zIndex: 999, alignItems: "center", justifyContent: "center" }]}>
-                    <LottieView
-                        source={require("../assets/Trophy.json")}
-                        autoPlay
-                        loop={false}
-                        style={{ width: 400, height: 400 }}
-                    />
-                </View>
-            )}
-
-            {/* Achievement Modal */}
-            <Modal visible={showAchievementModal} transparent animationType="none" onRequestClose={closeModal}>
-                <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" }}>
-                    <ConfettiOverlay />
-                    <Animated.View
-                        style={{
-                            transform: [{ scale: modalScale }],
-                            opacity: modalScale,
-                            width: width * 0.85,
-                            backgroundColor: "#fff",
-                            borderRadius: 36,
-                            paddingVertical: 20,
-                            paddingHorizontal: 20,
-                            alignItems: "center",
-                            elevation: 0,
-                        }}
-                    >
-                        {/* Glow Ring */}
-                        <View
-                            style={{
-                                borderRadius: 25,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                marginBottom: 20,
-                                marginTop:10
-                            }}
-                        >
-                            <Text style={{ fontSize: 54 }}>{selectedMilestone?.emoji}</Text>
-                        </View>
-
-                        {/* Title */}
-                        <Text className="text-gray-900 font-geist-sb text-2xl text-center mb-2">
-                            Congrats, {selectedMilestone?.label}!
-                        </Text>
-
-                        {/* Subtitle */}
-                        <Text className="text-gray-400 font-geist-md text-sm text-center mb-1">
-                            {selectedMilestone?.days}-Day Streak Achieved
-                        </Text>
-
-                        {/* Badge Pill */}
-                        <View
-                            style={{
-                                backgroundColor: (selectedMilestone?.color || "#FF6A00") + "20",
-                                borderRadius: 100,
-                                paddingHorizontal: 20,
-                                paddingVertical: 6,
-                                marginTop: 20,
-                                marginBottom: 20,
-                            }}
-                        >
-                            <Text style={{ color: "#FF6A00", fontWeight: "600", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                                🔥 {currentStreak} Day Streak
-                            </Text>
-                        </View>
-
-                        {/* Motivational Text */}
-                        <Text className="text-gray-500 font-geist-md text-center text-sm leading-5 mb-8 px-4">
-                            You're on fire! Consistency is the key to mastering your finances. Keep tracking every day!
-                        </Text>
-
-                        {/* Close Button */}
-                        <TouchableOpacity
-                            onPress={closeModal}
-                            activeOpacity={0.9}
-                            style={{
-                                backgroundColor: "#FF6A00",
-                                borderRadius: 100,
-                                paddingVertical: 12,
-                                paddingHorizontal: 114,
-                                shadowColor: "#FF6A00",
-                                
-                            }}
-                        >
-                            <Text className="text-white font-geist-sb text-base">Let's Go!</Text>
-                        </TouchableOpacity>
-                    </Animated.View>
-                </View>
-            </Modal>
+            <StreakCelebration 
+                isVisible={!!celebratingMilestone}
+                milestone={celebratingMilestone}
+                currentStreak={currentStreak}
+                onClose={() => setCelebratingMilestone(null)}
+            />
         </SafeAreaView>
     );
 }
