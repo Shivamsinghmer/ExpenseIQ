@@ -46,6 +46,8 @@ export default function EMITracker() {
         mutationFn: (id: string) => emisAPI.update(id, { paidMonths: (emis?.find(e => e.id === id)?.paidMonths || 0) + 1 }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["emis"] });
+            queryClient.invalidateQueries({ queryKey: ["transactions"] });
+            queryClient.invalidateQueries({ queryKey: ["summary"] });
         },
     });
 

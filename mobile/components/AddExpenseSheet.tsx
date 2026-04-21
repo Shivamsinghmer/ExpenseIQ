@@ -28,6 +28,7 @@ import {
     transactionsAPI,
     paymentsAPI,
     budgetsAPI,
+    envelopesAPI,
     type CreateTransactionData,
 } from "../services/api";
 import {
@@ -36,7 +37,8 @@ import {
     Utensils, ShoppingBag, Car, HeartPulse, Home as HomeIcon,
     Gamepad2, Zap, Wallet, MoreHorizontal, Plane,
     GraduationCap, Gift, TrendingUp, TrendingDown, ShoppingCart, Coffee,
-    Plus
+    Plus,
+    Goal
 } from "lucide-react-native";
 
 const AVATARS = [
@@ -92,6 +94,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
         const [notes, setNotes] = useState("");
         const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+        const [selectedEnvelopeId, setSelectedEnvelopeId] = useState<string | null>(null);
         const [showTypeDropdown, setShowTypeDropdown] = useState(false);
         const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
         const typeTriggerRef = useRef<View>(null);
@@ -158,6 +161,21 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             }
         });
 
+        const { data: envelopesData } = useQuery({
+            queryKey: ["envelopes"],
+            queryFn: async () => {
+                const res = await envelopesAPI.getAll();
+                return res.data;
+            }
+        });
+
+        const activeEnvelopes = useMemo(() => {
+            if (!envelopesData) return [];
+            const now = new Date();
+            now.setHours(0,0,0,0);
+            return envelopesData.filter(e => new Date(e.endDate) >= now);
+        }, [envelopesData]);
+
         const totalBudget = useMemo(() => {
             return budgetsData?.reduce((acc: number, curr: any) => acc + curr.amount, 0) || 0;
         }, [budgetsData]);
@@ -166,7 +184,17 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
 
         const createMutation = useMutation({
             mutationFn: (data: CreateTransactionData) => transactionsAPI.create(data),
-            onSuccess: () => {
+            onSuccess: (_, variables) => {
+                // If linked to envelope, manually update its spent amount
+                if (selectedEnvelopeId && variables.amount && variables.type === "EXPENSE") {
+                    const env = activeEnvelopes.find(e => e.id === selectedEnvelopeId);
+                    if (env) {
+                        envelopesAPI.update(env.id, { spent: env.spent + variables.amount })
+                            .then(() => queryClient.invalidateQueries({ queryKey: ["envelopes"] }))
+                            .catch(e => console.error("Failed to sync envelope", e));
+                    }
+                }
+
                 queryClient.invalidateQueries({ queryKey: ["transactions"] });
                 queryClient.invalidateQueries({ queryKey: ["summary"] });
                 resetForm();
@@ -190,6 +218,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             setAmount("");
             setNotes("");
             setSelectedCategory(null);
+            setSelectedEnvelopeId(null);
             setLocation(null);
             setIsSplit(false);
             setSelectedFriends([]);
@@ -240,6 +269,14 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                 }).join(", ");
                 
                 mutationData.notes = (mutationData.notes ? `${mutationData.notes} | ` : "") + `Split: ${splitInfo}`;
+            }
+
+            // Append envelope info if linked
+            if (selectedEnvelopeId) {
+                const env = activeEnvelopes.find(e => e.id === selectedEnvelopeId);
+                if (env) {
+                    mutationData.notes = (mutationData.notes ? `${mutationData.notes} | ` : "") + `Env:${env.id}|EnvTitle:${env.title}|EnvIcon:${env.icon || '🎯'}`;
+                }
             }
 
             createMutation.mutate(mutationData);
@@ -306,19 +343,27 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
 
                     if (reverse && reverse.length > 0) {
                         const addr = reverse[0];
-                        const parts = [
+                        const allParts = [
                             addr.name,
                             addr.street,
                             addr.district,
-                            addr.city
+                            addr.city,
+                            addr.subregion,
+                            addr.region
                         ].filter(Boolean);
-                        const displayAddr = parts.slice(0, 2).join(", ") || `${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`;
-                        setLocation(displayAddr);
+                        
+                        const uniqueParts = Array.from(new Set(allParts));
+                        
+                        if (uniqueParts.length > 0) {
+                            setLocation(uniqueParts.slice(0, 2).join(", "));
+                        } else {
+                            setLocation("Unknown Address");
+                        }
                     } else {
-                        setLocation(`${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`);
+                        setLocation("Unknown Address");
                     }
                 } catch (geoError) {
-                    setLocation(`${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`);
+                    setLocation("Unknown Address");
                 }
             } catch (error) {
                 Alert.alert('Location Error', 'Failed to get your location.');
@@ -543,6 +588,55 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                             </View>
                         </View>
                     </View>
+
+                    {/* Envelope Linking */}
+                    {activeEnvelopes.length > 0 && (
+                        <>
+                            <View className="mx-5 bg-white rounded-2xl px-5 py-4 mb-4 flex-row items-center justify-between border border-gray-100 shadow-sm">
+                                <View className="flex-row items-center">
+                                    <Goal size={18} color="#FF6A00" />
+                                    <Text className="text-gray-900 text-sm font-geist-sb ml-3">Link to Goal</Text>
+                                </View>
+                                <Switch
+                                    trackColor={{ false: "#e5e7eb", true: "#FF6A00" }}
+                                    thumbColor="#fff"
+                                    onValueChange={(val) => {
+                                        if (val && activeEnvelopes.length > 0) {
+                                            setSelectedEnvelopeId(activeEnvelopes[0].id);
+                                        } else {
+                                            setSelectedEnvelopeId(null);
+                                        }
+                                    }}
+                                    value={selectedEnvelopeId !== null}
+                                />
+                            </View>
+
+                            {selectedEnvelopeId !== null && (
+                                <View className="mx-5 bg-white rounded-2xl p-5 mb-4 border border-gray-100 shadow-sm">
+                                    <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-4">Select Target Goal</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
+                                        {activeEnvelopes.map(env => {
+                                            const isSelected = selectedEnvelopeId === env.id;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={env.id}
+                                                    onPress={() => setSelectedEnvelopeId(env.id)}
+                                                    className="items-center mr-4"
+                                                >
+                                                    <View 
+                                                        className={`w-14 h-14 rounded-full items-center justify-center mb-1 border-2 ${isSelected ? 'border-[#FF6A00] bg-orange-50' : 'border-transparent bg-gray-50'}`}
+                                                    >
+                                                        <Text className="text-xl">{env.icon || '🎯'}</Text>
+                                                    </View>
+                                                    <Text className={`text-[10px] font-geist-md w-14 text-center ${isSelected ? 'text-[#FF6A00]' : 'text-gray-500'}`} numberOfLines={1}>{env.title}</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </ScrollView>
+                                </View>
+                            )}
+                        </>
+                    )}
 
                     {/* Split with Friends */}
                     <View className="mx-5 bg-white rounded-2xl px-5 py-4 mb-4 flex-row items-center justify-between border border-gray-100 shadow-sm">

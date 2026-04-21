@@ -4,7 +4,7 @@ import {
     Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon,
     Zap, HeartPulse, Plane, Gamepad2, GraduationCap,
     Gift, TrendingUp, Wallet, MoreHorizontal, Trash2,
-    X, Users, ArrowRight, CheckCircle2
+    X, Users, ArrowRight, CheckCircle2, Calendar
 } from "lucide-react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -55,6 +55,7 @@ interface TransactionItemProps {
     onDelete?: (id: string) => void;
     isExpired?: boolean;
     showSwipe?: boolean;
+    remainingBudget?: number;
 }
 
 const getAvatarForName = (name: string) => {
@@ -65,7 +66,7 @@ const getAvatarForName = (name: string) => {
     return AVATARS[Math.abs(hash) % AVATARS.length];
 };
 
-export function TransactionItem({ item, onDelete, isExpired, showSwipe = false }: TransactionItemProps) {
+export function TransactionItem({ item, onDelete, isExpired, showSwipe = false, remainingBudget }: TransactionItemProps) {
     const [showBreakdown, setShowBreakdown] = useState(false);
     const queryClient = useQueryClient();
     const isIncome = item.type === "INCOME";
@@ -73,6 +74,28 @@ export function TransactionItem({ item, onDelete, isExpired, showSwipe = false }
 
     const isResolved = useMemo(() => {
         return item.notes?.includes("Resolved: true");
+    }, [item.notes]);
+
+    const emiInfo = useMemo(() => {
+        if (!item.notes) return null;
+        const emiPart = item.notes.split('|').find(p => p.trim().startsWith('EMI:'));
+        if (!emiPart) return null;
+        const parts = emiPart.split(' ');
+        const progress = parts.find(p => p.includes('/'));
+        return progress || "EMI";
+    }, [item.notes]);
+
+    const isEMI = !!emiInfo;
+
+    const envInfo = useMemo(() => {
+        if (!item.notes) return null;
+        const envPart = item.notes.split('|').find(p => p.trim().startsWith('EnvTitle:'));
+        if (!envPart) return null;
+        
+        const envIconPart = item.notes.split('|').find(p => p.trim().startsWith('EnvIcon:'));
+        const title = envPart.replace('EnvTitle:', '').trim();
+        const icon = envIconPart ? envIconPart.replace('EnvIcon:', '').trim() : '🎯';
+        return { title, icon };
     }, [item.notes]);
 
     const splitFriends = useMemo(() => {
@@ -137,25 +160,49 @@ export function TransactionItem({ item, onDelete, isExpired, showSwipe = false }
             </View>
             <View className="flex-1">
                 <Text className="text-gray-900 dark:text-white font-geist-sb text-base" numberOfLines={1}>{item.title}</Text>
+                
                 <View className="flex-row items-center mt-0.5">
-                    <Text className="text-gray-400 dark:text-gray-500 text-xs font-geist-md" numberOfLines={1}>
+                    <Text className="text-gray-400 dark:text-gray-500 text-[11px] font-geist-md" numberOfLines={1}>
                         {item.category || "Other"}
                     </Text>
-                    {splitFriends && (
-                        <View className="flex-row items-center">
-                            <View className="ml-2 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100 flex-row items-center">
-                                <Users size={10} color="#FF6A00" />
-                                <Text className="text-[#FF6A00] text-[9px] font-geist-sb ml-1 uppercase">Split</Text>
-                            </View>
-                            {isResolved && (
-                                <View className="ml-1.5 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 flex-row items-center">
-                                    <CheckCircle2 size={10} color="#10b981" />
-                                    <Text className="text-[#10b981] text-[9px] font-geist-sb ml-1 uppercase">Resolved</Text>
-                                </View>
-                            )}
+                    {isEMI && (
+                        <View className="ml-2 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-800 flex-row items-center">
+                            <Calendar size={10} color="#3b82f6" />
+                            <Text className="text-blue-500 dark:text-blue-400 text-[9px] font-geist-sb ml-1 uppercase">EMI</Text>
+                        </View>
+                    )}
+                    {envInfo && (
+                        <View className="ml-2 bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-full border border-purple-100 dark:border-purple-800 flex-row items-center">
+                            <Text style={{ fontSize: 9, marginRight: 2 }}>{envInfo.icon}</Text>
+                            <Text className="text-purple-600 dark:text-purple-400 text-[9px] font-geist-sb uppercase">{envInfo.title}</Text>
                         </View>
                     )}
                 </View>
+
+                {/* Budget Progress Label */}
+                {!isIncome && remainingBudget !== undefined && (
+                    <Text className={`text-[10px] font-geist-md mt-0.5 ${remainingBudget < 0 ? "text-red-500" : "text-emerald-600"}`}>
+                        {remainingBudget < 0 
+                            ? `Exceeded ${item.category} budget by ₹${Math.abs(remainingBudget).toLocaleString("en-IN")}`
+                            : `₹${remainingBudget.toLocaleString("en-IN")} left in ${item.category} budget`}
+                    </Text>
+                )}
+
+                {/* Split info on next line */}
+                {splitFriends && (
+                    <View className="flex-row items-center mt-1">
+                        <View className="bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100 flex-row items-center">
+                            <Users size={10} color="#FF6A00" />
+                            <Text className="text-[#FF6A00] text-[9px] font-geist-sb ml-1 uppercase">Split</Text>
+                        </View>
+                        {isResolved && (
+                            <View className="ml-1.5 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 flex-row items-center">
+                                <CheckCircle2 size={10} color="#10b981" />
+                                <Text className="text-[#10b981] text-[9px] font-geist-sb ml-1 uppercase">Resolved</Text>
+                            </View>
+                        )}
+                    </View>
+                )}
             </View>
             <View className="items-end">
                 <Text className={`font-geist-b text-[17px] ${isIncome ? "text-emerald-500" : "text-red-500"}`}>

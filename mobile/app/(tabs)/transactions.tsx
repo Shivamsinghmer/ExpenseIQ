@@ -6,7 +6,10 @@ import {
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
-import { transactionsAPI, paymentsAPI, type Transaction, type TransactionListResponse } from "../../services/api";
+import { 
+    transactionsAPI, paymentsAPI, budgetsAPI,
+    type Transaction, type TransactionListResponse 
+} from "../../services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { 
     BadgeDollarSignIcon, Search, X, PieChart, 
@@ -14,7 +17,7 @@ import {
     Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon,
     Zap, HeartPulse, Plane, Gamepad2, GraduationCap,
     Gift, TrendingUp, Wallet, MoreHorizontal, Trash2,
-    ChevronRight, Filter
+    ChevronRight, Filter, Calendar
 } from "lucide-react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
@@ -73,8 +76,6 @@ const CATEGORY_ICONS: Record<string, any> = {
     Salary: Wallet,
     Other: MoreHorizontal,
 };
-
-
 
 export default function Transactions() {
     const router = useRouter();
@@ -152,6 +153,37 @@ export default function Transactions() {
         queryKey: ["transactions", filter, dateRangeFilter, page],
         queryFn: async () => { const res = await transactionsAPI.getAll(queryParams); return res.data; },
     });
+
+    const { data: budgets } = useQuery({
+        queryKey: ["budgets"],
+        queryFn: async () => {
+            const res = await budgetsAPI.getAll();
+            return res.data;
+        },
+    });
+
+    const { data: summary } = useQuery({
+        queryKey: ["summary", dateRangeFilter],
+        queryFn: async () => {
+            const res = await transactionsAPI.getSummary(queryParams);
+            return res.data;
+        },
+    });
+
+    const categorySpending = useMemo(() => {
+        const spending: Record<string, number> = {};
+        summary?.categoryBreakdown?.forEach((cat: any) => {
+            spending[cat.name] = cat.totalSpent;
+        });
+        return spending;
+    }, [summary]);
+
+    const getRemainingBudget = useCallback((category?: string) => {
+        if (!category || !budgets) return undefined;
+        const budget = budgets.find((b: any) => b.category === category);
+        if (!budget) return undefined;
+        return budget.amount - (categorySpending[category] || 0);
+    }, [budgets, categorySpending]);
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => transactionsAPI.delete(id),
@@ -352,6 +384,7 @@ export default function Transactions() {
                                             <TransactionItem 
                                                 key={tx.id} 
                                                 item={tx} 
+                                                remainingBudget={getRemainingBudget(tx.category)}
                                                 onDelete={(id) => {
                                                     if (isExpired) {
                                                         Alert.alert("Trial Expired", "Upgrade to Pro to delete transactions.");

@@ -143,7 +143,7 @@ const AddEnvelopeSheet = forwardRef<BottomSheet, AddEnvelopeSheetProps>(({ onClo
                                         setShowEmojiDropdown(true);
                                     });
                                 }}
-                                className="bg-[#FF6A00] dark:bg-slate-900 px-5 py-2 rounded-full flex-row items-center justify-between self-start min-w-[140px]"
+                                className="bg-[#FF6A00] dark:bg-slate-900 px-5 py-2 rounded-full flex-row items-center justify-between self-start min-w-[80px]"
                             >
                                 <View className="flex-row items-center">
                                     <Text className="text-2xl mr-2">{icon}</Text>
@@ -154,7 +154,7 @@ const AddEnvelopeSheet = forwardRef<BottomSheet, AddEnvelopeSheetProps>(({ onClo
                             {showEmojiDropdown && (
                                 <Modal transparent visible={showEmojiDropdown} animationType="fade" onRequestClose={() => setShowEmojiDropdown(false)}>
                                     <TouchableWithoutFeedback onPress={() => setShowEmojiDropdown(false)}>
-                                        <View className="flex-1 bg-black/5">
+                                        <View className="flex-1">
                                             <View 
                                                 style={{ 
                                                     position: 'absolute', 

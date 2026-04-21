@@ -70,6 +70,25 @@ export const updateEmi = async (req: AuthenticatedRequest, res: Response) => {
         const newPaidMonths = data.paidMonths !== undefined ? data.paidMonths : existing.paidMonths;
         const totalMonths = data.totalMonths !== undefined ? data.totalMonths : existing.totalMonths;
 
+        // If paidMonths increased, create a transaction
+        if (data.paidMonths !== undefined && data.paidMonths > existing.paidMonths) {
+            const increment = data.paidMonths - existing.paidMonths;
+            for (let i = 0; i < increment; i++) {
+                const installmentNum = existing.paidMonths + i + 1;
+                await (prisma as any).transaction.create({
+                    data: {
+                        userId: user.id,
+                        title: `EMI Payment: ${existing.title}`,
+                        amount: existing.monthlyAmount,
+                        type: "EXPENSE",
+                        category: "Bills",
+                        date: new Date(),
+                        notes: `EMI:${existing.id} | Installment ${installmentNum}/${totalMonths}`,
+                    }
+                });
+            }
+        }
+
         if (newPaidMonths >= totalMonths) {
             data.isDone = true;
         } else {

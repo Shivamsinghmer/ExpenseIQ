@@ -409,22 +409,61 @@ export default function Analytics() {
                                                     <View className="gap-y-4">
                                                         {categoryTransactions.slice(0, 4).map((t, i) => {
                                                             const dateStr = new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+                                                            
+                                                            const isEMI = t.title.toLowerCase().includes("emi");
+                                                            
                                                             // Extract location from notes if it starts with "At "
-                                                            let location = "Unknown Location";
-                                                            if (t.notes && t.notes.startsWith("At ")) {
-                                                                location = t.notes.substring(3).trim();
+                                                            let location = undefined;
+                                                            if (!isEMI && t.notes && t.notes.includes("At ")) {
+                                                                const parts = t.notes.split('|');
+                                                                const locPart = parts.find(p => p.trim().startsWith('At '));
+                                                                location = locPart ? locPart.trim().substring(3) : undefined;
+                                                            }
+
+                                                            let emiProgress = undefined;
+                                                            if (isEMI && t.notes) {
+                                                                const progressMatch = t.notes.match(/\d+\/\d+/);
+                                                                emiProgress = progressMatch ? progressMatch[0] : undefined;
+                                                            }
+
+                                                            let splitInfo = undefined;
+                                                            if (t.notes && t.notes.includes("Split:")) {
+                                                                const splitPart = t.notes.split('|').find(p => p.trim().startsWith('Split:'));
+                                                                if (splitPart) {
+                                                                    splitInfo = splitPart.replace('Split:', '').trim();
+                                                                }
+                                                            }
+
+                                                            let envInfo = undefined;
+                                                            if (t.notes && t.notes.includes("EnvTitle:")) {
+                                                                const envPart = t.notes.split('|').find(p => p.trim().startsWith('EnvTitle:'));
+                                                                const envIconPart = t.notes.split('|').find(p => p.trim().startsWith('EnvIcon:'));
+                                                                if (envPart) {
+                                                                    envInfo = {
+                                                                        title: envPart.replace('EnvTitle:', '').trim(),
+                                                                        icon: envIconPart ? envIconPart.replace('EnvIcon:', '').trim() : '🎯'
+                                                                    };
+                                                                }
                                                             }
 
                                                             return (
                                                                 <View key={t.id || i} className="flex-row justify-between items-start">
                                                                     <View className="flex-1 mr-4">
                                                                         <Text className="text-gray-900 dark:text-white font-geist-sb text-sm" numberOfLines={1}>{t.title}</Text>
-                                                                        <Text className="text-gray-400 text-[10px] mt-0.5" numberOfLines={1}>
-                                                                            {dateStr}  •  {location}
-                                                                        </Text>
-                                                                        {t.notes && t.notes !== location && !t.notes.startsWith("At ") && (
-                                                                            <Text className="text-gray-500 dark:text-gray-400 text-[10px] mt-1 font-geist-md italic" numberOfLines={2}>
-                                                                                "{t.notes}"
+                                                                        <View className="flex-row items-center mt-0.5">
+                                                                            <Text className="text-gray-400 text-[10px]" numberOfLines={1}>
+                                                                                {dateStr} {location ? ` •  ${location}` : ""} {emiProgress ? ` •  Installment ${emiProgress}` : ""}
+                                                                            </Text>
+                                                                            {envInfo && (
+                                                                                <View className="ml-2 bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-full border border-purple-100 dark:border-purple-800 flex-row items-center">
+                                                                                    <Text style={{ fontSize: 9, marginRight: 2 }}>{envInfo.icon}</Text>
+                                                                                    <Text className="text-purple-600 dark:text-purple-400 text-[9px] font-geist-sb uppercase">{envInfo.title}</Text>
+                                                                                </View>
+                                                                            )}
+                                                                        </View>
+                                                                        {splitInfo && (
+                                                                            <Text className="text-gray-400 dark:text-gray-400 text-[10px] mt-1 font-geist" numberOfLines={2}>
+                                                                                Split: {splitInfo}
                                                                             </Text>
                                                                         )}
                                                                     </View>
@@ -433,6 +472,7 @@ export default function Analytics() {
                                                                     </Text>
                                                                 </View>
                                                             );
+
                                                         })}
                                                     </View>
                                                 ) : (
