@@ -586,8 +586,8 @@ export default function Analytics() {
                                         <View className="flex-row items-center justify-between mb-6">
                                             <View className="flex-row items-center">
                                                 <View>
-                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-[20px]">Inflation Pulse</Text>
-                                                    <Text className="text-gray-400 text-sm font-geist-md">Purchasing Power Surge</Text>
+                                                    <Text className="text-gray-900 dark:text-white font-geist-b text-[20px]">Inflation Indicator</Text>
+                                                    <Text className="text-gray-400 text-sm font-geist-md">Inflation compared to last month</Text>
                                                 </View>
                                             </View>
                                         </View>
