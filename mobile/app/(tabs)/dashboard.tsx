@@ -25,7 +25,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 const StorageAccessFramework = (FileSystem as any).StorageAccessFramework;
 import { transactionsAPI, paymentsAPI, streaksAPI, type SummaryResponse, type Transaction } from "../../services/api";
 import {
-    Landmark, Wallet, ChevronRight, List, Flame, RefreshCw, Map,
+    Landmark, Wallet, Timer, ChevronRight, List, Flame, RefreshCw, Map,
     ArrowDown, ArrowUp, File, Crown, AlertCircle, Clock, MessageSquare, Sparkles,
     Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon,
     Zap, HeartPulse, Plane, Gamepad2, GraduationCap,
@@ -585,8 +585,11 @@ export default function Dashboard() {
                     <TouchableOpacity 
                         onPress={() => router.push("/money-story")}
                         activeOpacity={0.85}
-                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100 relative"
                     >
+                        <View style={{ position: 'absolute', top: 8, right: 8 }}>
+                            <Timer size={16} color="#FF6A00" />
+                        </View>
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <Sparkles size={20} color="#FF6A00" />
                         </View>

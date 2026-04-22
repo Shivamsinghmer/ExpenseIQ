@@ -116,6 +116,22 @@ export const getStreakStats = async (userId: string) => {
     const isStillValid = lastActive && (lastActive.getTime() === today.getTime() || lastActive.getTime() === yesterday.getTime());
     const currentStreak = isStillValid ? (user as any).currentStreak : 0;
 
+    // Calculate percentile
+    const totalUsers = await (prisma as any).user.count({ 
+        where: { longestStreak: { gt: 0 } } 
+    });
+    
+    const usersWithHigherStreak = await (prisma as any).user.count({
+        where: { longestStreak: { gt: (user as any).longestStreak } }
+    });
+
+    // Percentile: (1 - (higher_count / total)) * 100
+    // Example: 100 users, 1 better than me. Rank 2. (1 - 1/100) = 0.99. Top 1% (roughly).
+    // Let's use Top % specifically: (higher_count + 1) / total * 100
+    const topPercentile = totalUsers > 0 
+        ? Math.max(1, Math.ceil(((usersWithHigherStreak + 1) / totalUsers) * 100))
+        : 100;
+
     return {
         currentStreak,
         longestStreak: (user as any).longestStreak,
@@ -123,6 +139,7 @@ export const getStreakStats = async (userId: string) => {
         activeDates,
         daysInMonth: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
         lastActiveDate: (user as any).lastActiveDate,
+        percentile: topPercentile,
     };
 };
 

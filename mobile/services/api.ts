@@ -227,6 +227,7 @@ export interface StreakStats {
     activeDates: string[];
     daysInMonth: number;
     lastActiveDate: string | null;
+    percentile: number;
 }
 
 export interface LeaderboardEntry {

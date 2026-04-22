@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
     View,
     Text,
@@ -10,7 +10,11 @@ import {
     StatusBar,
     Share,
     Image,
+    Platform,
+    Linking,
 } from "react-native";
+import ViewShot from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { 
@@ -42,7 +46,8 @@ import Animated, {
     type SharedValue
 } from "react-native-reanimated";
 import { useQuery } from "@tanstack/react-query";
-import { transactionsAPI } from "../services/api";
+import { transactionsAPI, streaksAPI } from "../services/api";
+import { useCurrency } from "../providers/CurrencyProvider";
 
 const { width, height } = Dimensions.get("window");
 const STORY_DURATION = 5000; // 5 seconds per card
@@ -55,11 +60,11 @@ const STORY_COLORS = [
     ["#111827", "#374151"], // Dark
 ];
 
-const ProgressBarItem = ({ index, activeIndex, progress }: { index: number, activeIndex: number, progress: SharedValue<number> }) => {
+const ProgressBarItem = ({ index, currentIndex, progress }: { index: number, currentIndex: number, progress: SharedValue<number> }) => {
     const animatedStyle = useAnimatedStyle(() => ({
-        width: index === activeIndex 
+        width: index === currentIndex 
             ? `${progress.value * 100}%` 
-            : index < activeIndex ? '100%' : '0%'
+            : index < currentIndex ? '100%' : '0%'
     }));
 
     return (
@@ -100,7 +105,7 @@ const StorySkeleton = () => {
             <SafeAreaView className="flex-1" edges={['top']}>
                 {/* Skeleton Progress Bars */}
                 <View className="flex-row gap-1.5 px-4 mt-2">
-                    {[1, 2, 3, 4, 5].map((i) => (
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
                         <View key={i} className="flex-1 h-1 bg-gray-200 rounded-full" />
                     ))}
                 </View>
@@ -146,19 +151,42 @@ const StorySkeleton = () => {
     );
 };
 
+const StrokeText = ({ text, color, strokeColor, strokeWidth = 1, style, className }: any) => {
+    return (
+        <View style={[{ position: 'relative' }, style]}>
+            <Text className={className} style={{ position: 'absolute', top: -strokeWidth, left: -strokeWidth, color: strokeColor }}>{text}</Text>
+            <Text className={className} style={{ position: 'absolute', top: -strokeWidth, left: strokeWidth, color: strokeColor }}>{text}</Text>
+            <Text className={className} style={{ position: 'absolute', top: strokeWidth, left: -strokeWidth, color: strokeColor }}>{text}</Text>
+            <Text className={className} style={{ position: 'absolute', top: strokeWidth, left: strokeWidth, color: strokeColor }}>{text}</Text>
+            <Text className={className} style={{ color: color }}>{text}</Text>
+        </View>
+    );
+};
+
 export default function MoneyStory() {
     const router = useRouter();
     const [currentIndex, setCurrentIndex] = useState(0);
     const progress = useSharedValue(0);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const viewShotRef = useRef<any>(null);
 
-    const { data: summary, isLoading } = useQuery({
+    const { data: summary, isLoading: isSummaryLoading } = useQuery({
         queryKey: ["transactions-summary"],
         queryFn: () => transactionsAPI.getSummary().then(res => res.data),
     });
 
+    const { data: streak, isLoading: isStreakLoading } = useQuery({
+        queryKey: ["streaks"],
+        queryFn: () => streaksAPI.getStats().then(res => res.data),
+    });
+
+    const { currency } = useCurrency();
+    const currentDate = new Date();
+    const currentMonth = currentDate.toLocaleString('default', { month: 'long' });
+    const currentYear = currentDate.getFullYear();
+
     const storyData = useMemo(() => {
-        if (!summary) return null;
+        if (!summary || !streak) return null;
 
         const topTag = summary.categoryBreakdown?.[0];
         
@@ -183,9 +211,28 @@ export default function MoneyStory() {
             topCategoryAmount: topTag?.totalSpent || 0,
             topMerchant: topMerchant ? topMerchant[0] : "Various Places",
             topMerchantAmount: topMerchant ? topMerchant[1].amount : 0,
-            daysActive: 7,
+            daysActive: streak.currentStreak || 0,
+            percentile: streak.percentile || 100,
         };
-    }, [summary]);
+    }, [summary, streak]);
+
+    const handleShareToInstagram = useCallback(async () => {
+        try {
+            if (viewShotRef.current) {
+                const uri = await viewShotRef.current.capture();
+                await Sharing.shareAsync(uri, {
+                    mimeType: 'image/png',
+                    UTI: 'public.png',
+                    dialogTitle: 'Share your Money Story',
+                });
+            }
+        } catch (error) {
+            console.log('Share error:', error);
+            await Share.share({
+                message: `Check out my Financial Wrapped on ExpensePal! I spent ${currency.symbol}${storyData?.totalExpense.toLocaleString()} this month. 📈`,
+            });
+        }
+    }, [storyData, currency]);
 
     const activeIndex = useSharedValue(0);
 
@@ -205,7 +252,7 @@ export default function MoneyStory() {
     };
 
     const nextStory = () => {
-        if (currentIndex < 4) {
+        if (currentIndex < 5) {
             setCurrentIndex(prev => prev + 1);
         } else {
             router.back();
@@ -242,7 +289,7 @@ export default function MoneyStory() {
     const handleShare = async () => {
         try {
             await Share.share({
-                message: `Check out my Financial Wrapped on ExpensePal! I spent ₹${storyData?.totalExpense.toLocaleString()} this month. 📈`,
+                message: `Check out my Financial Wrapped on ExpensePal! I spent ${currency.symbol}${storyData?.totalExpense.toLocaleString()} this month. 📈`,
             });
         } catch (error) {
             console.log(error);
@@ -252,129 +299,224 @@ export default function MoneyStory() {
     const cards = useMemo(() => {
         if (!storyData) return [];
         return [
-            <View key={0} className="flex-1 items-center justify-start px-6 pt-16">
+            <View key={0} className="flex-1 items-end justify-right px-6 pt-16">
+                <View className="mb-8">
+                    <Text className="text-black font-geist-b text-5xl uppercase tracking-widest self-end mb-8">Your</Text>
+                    <View className="bg-[#FFC0CB] border-[2px] border-black px-1 py-3">
+                        <Text className="text-black font-geist-b text-6xl uppercase tracking-widest text-right">{currentMonth} WRAPPED</Text>
+                    </View>
+                </View>
+                <Text className="text-black text-8xl font-geist-b">{currentYear}</Text>
+                <Text className="text-black text-6xl font-geist-b text-right">IS HERE.</Text>
+            </View>,
+            <View key={1} className="flex-1 items-center justify-start px-6 pt-16">
                 <View className="w-full">
                     <View 
-                        className="bg-[#CCFF00] px-4 py-2 self-start mb-8 rotate-[-2deg] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-                        style={{ borderWidth: 2, borderColor: 'white' }}
+                        className="bg-[#CCFF00] px-4 py-2 self-start mb-8 rotate-[0deg] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                        style={{ borderWidth: 2, borderColor: 'black' }}
                     >
-                        <Text className="text-white font-geist-b text-sm uppercase tracking-widest">Big Picture</Text>
+                        <Text className="text-black font-geist-b text-sm uppercase tracking-widest">Big Picture</Text>
                     </View>
 
-                    <Text className="text-white text-6xl font-geist-b uppercase leading-[54px] tracking-tighter mb-12">
-                        YOUR MONTH{"\n"}
-                        <Text className="text-[#CCFF00]">IN A NUTSHELL.</Text>
-                    </Text>
+                    <View className="mb-12">
+                        <StrokeText 
+                            text="YOUR MONTH" 
+                            color="white" 
+                            strokeColor="red" 
+                            className="text-7xl font-geist-b uppercase tracking-tighter" 
+                        />
+                        <StrokeText 
+                            text="IN A NUTSHELL." 
+                            color="#CCFF00" 
+                            strokeColor="black" 
+                            className="text-7xl font-geist-b uppercase tracking-tighter" 
+                        />
+                    </View>
                     
                     <View className="gap-6">
-                        <View className="bg-white border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 rounded-sm">
+                        <View className="bg-white border-[2px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 rounded-sm">
                             <Text className="text-black text-[14px] font-geist-b uppercase mb-2 tracking-wider">💸 Total Gone</Text>
-                            <Text className="text-black text-4xl font-geist-b">₹{storyData.totalExpense.toLocaleString()}</Text>
+                            <Text className="text-black text-4xl font-geist-b">{currency.symbol}{storyData.totalExpense.toLocaleString()}</Text>
                         </View>
                         
-                        <View className="bg-white border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 rounded-sm">
+                        <View className="bg-white border-[2px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 rounded-sm">
                             <Text className="text-black text-[14px] font-geist-b uppercase mb-2 tracking-wider">🤑 Total Earned</Text>
-                            <Text className="text-black text-4xl font-geist-b">₹{storyData.totalIncome.toLocaleString()}</Text>
+                            <Text className="text-black text-4xl font-geist-b">{currency.symbol}{storyData.totalIncome.toLocaleString()}</Text>
                         </View>
                     </View>
                 </View>
             </View>,
             <View key={1} className="flex-1 px-6 pt-16">
                 <View className="mb-12">
-                    <View className="bg-[#00F0FF] border-[3px] border-black px-0 py-3 self-start shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] rotate-[3deg]">
-                        <Text className="text-black font-geist-b text-xl uppercase tracking-tighter">Soulmate Found</Text>
+                    <View className="bg-[#00F0FF] border-[2px] border-black px-3 py-2.5 self-start rotate-[0deg]">
+                        <Text className="text-black font-geist-b text-xl uppercase tracking-loose">Soulmate Found</Text>
                     </View>
                 </View>
 
                 <View className="items-end mb-12">
-                    <Text className="text-white text-right text-4xl font-geist-b uppercase leading-[42px] tracking-tight">
-                        You're a true{"\n"}
-                        <Text className="text-[#00F0FF] text-6xl">{storyData.topCategory === 'Food' ? 'Foodie' : storyData.topCategory}</Text>
-                        {"\n"}lover!
-                    </Text>
+                    <StrokeText 
+                        text="You're a true" 
+                        color="white" 
+                        strokeColor="orange" 
+                        className="text-5xl font-geist-b uppercase tracking-tight text-right" 
+                    />
+                    <StrokeText 
+                        text={storyData.topCategory === 'Food' ? 'Foodie' : storyData.topCategory} 
+                        color="#00F0FF" 
+                        strokeColor="black" 
+                        className="text-7xl font-geist-b uppercase tracking-tight text-right" 
+                    />
+                    <StrokeText 
+                        text="lover!" 
+                        color="white" 
+                        strokeColor="orange" 
+                        className="text-5xl font-geist-b uppercase tracking-tight text-right" 
+                    />
                 </View>
 
                 <View className="w-full flex-row mb-12">
-                    <View className="flex-1 bg-white border-[4px] border-black p-8 pt-7 pb-6 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] -rotate-[2deg]">
+                    <View className="flex-1 bg-white border-[2px] border-black p-8 pt-7 pb-6 -rotate-[0deg]">
                         <Text className="text-black text-sm font-geist-b uppercase mb-3 tracking-widest opacity-60">Your Obsession</Text>
-                        <Text className="text-black text-5xl font-geist-b mb-2">₹{storyData.topCategoryAmount.toLocaleString()}</Text>
+                        <Text className="text-black text-5xl font-geist-b mb-2">{currency.symbol}{storyData.topCategoryAmount.toLocaleString()}</Text>
                         <View className="h-0 w-12 bg-[#00F0FF] mt-0" />
                     </View>
                 </View>
 
                 <View className="mt-12 self-center">
-                    <View className="bg-white border border-white/20 px-5 py-4 backdrop-blur-md">
-                        <Text className="text-black font-geist-sb text-center">
-                            "Life is too short to skip this category, right?"
+                    <View className="bg-[#00F0FF] border-[2px] border-black px-5 py-4 backdrop-blur-md">
+                        <Text className="text-white font-geist-sb text-center">
+                            Life is too short to skip this category, right?
                         </Text>
                     </View>
                 </View>
             </View>,
-            <View key={2} className="flex-1 items-center justify-center px-10">
-                <View className="w-24 h-24 rounded-3xl bg-white/20 items-center justify-center mb-10 border border-white/30 rotate-12">
-                    <ShoppingBag size={48} color="white" />
+            <View key={3} className="flex-1 px-8 pt-10">
+                <View className="mb-12 self-end">
+                    <View className="bg-[#A855F7] border-[2px] border-black px-6 py-2.5 rotate-[0deg]">
+                        <Text className="text-white font-geist-b text-xl uppercase tracking-loose">Favorite Spot</Text>
+                    </View>
                 </View>
-                <Text className="text-white/80 text-lg font-geist-md mb-2">Your Favorite Destination</Text>
-                <Text className="text-white text-4xl font-geist-b text-center mb-4">You and {storyData.topMerchant} had a moment.</Text>
-                <View className="w-full bg-white/10 backdrop-blur-lg p-8 rounded-3xl border border-white/20 items-center">
-                    <Text className="text-white/60 text-xs font-geist-sb uppercase mb-2">Total Contributed</Text>
-                    <Text className="text-white text-4xl font-geist-b">₹{storyData.topMerchantAmount.toLocaleString()}</Text>
-                    <View className="h-px w-full bg-white/10 my-6" />
-                    <Text className="text-white/80 text-center font-geist-md">They probably recognize your transaction ID by now! 😉</Text>
+
+                <View className="mb-14">
+                    <Text className="text-black text-5xl font-geist-b uppercase leading-[50px] tracking-tight">
+                        You & {"\n"}
+                        <Text className="text-[#A855F7] text-5xl">{storyData.topMerchant}</Text>
+                        {"\n"}HAD A MOMENT.
+                    </Text>
+                </View>
+
+                <View className="w-full">
+                    <View className="bg-white border-[2px] border-black p-8 pb-7 pt-7 rotate-[0deg]">
+                        <Text className="text-black text-sm font-geist-b uppercase mb-3 tracking-widest opacity-60">Total Contributed</Text>
+                        <Text className="text-black text-5xl font-geist-b">{currency.symbol}{storyData.topMerchantAmount.toLocaleString()}</Text>
+                    </View>
+                </View>
+
+                <View className="mt-12 bg-[#A855F7] border-[2px] border-black p-4 self-start rotate-[0deg]">
+                    <Text className="text-white font-geist-sb">
+                        They probably recognize your transaction ID by now! 😉
+                    </Text>
                 </View>
             </View>,
-            <View key={3} className="flex-1 items-center justify-center px-10">
-                <View className="w-24 h-24 rounded-3xl bg-white/20 items-center justify-center mb-10 border border-white/30 -rotate-12">
-                    <Flame size={48} color="white" />
-                </View>
-                <Text className="text-white/80 text-lg font-geist-md mb-2">The Discipline Trophy</Text>
-                <Text className="text-white text-4xl font-geist-b text-center mb-10">Consistency is your superpower.</Text>
-                <View className="flex-row gap-4">
-                    <View className="flex-1 aspect-square bg-white/10 p-6 rounded-3xl border border-white/20 items-center justify-center">
-                        <Text className="text-white text-4xl font-geist-b">{storyData.daysActive}</Text>
-                        <Text className="text-white/60 text-[10px] font-geist-sb uppercase text-center mt-1">Day Streak</Text>
-                    </View>
-                    <View className="flex-1 aspect-square bg-white/10 p-6 rounded-3xl border border-white/20 items-center justify-center">
-                        <Trophy size={32} color="white" />
-                        <Text className="text-white/60 text-[10px] font-geist-sb uppercase text-center mt-2">Active Tracker</Text>
+            <View key={4} className="flex-1 px-10 pt-16">
+                <View className="mb-14">
+                    <View className="bg-[#FF7A00] border-[2px] border-black px-6 py-2.5 self-start">
+                        <Text className="text-white font-geist-b text-xl uppercase tracking-loose">Streak Unlocked</Text>
                     </View>
                 </View>
-                <Text className="text-white/80 text-center mt-12 font-geist-md leading-6 px-10">You tracked your money with precision this month. Your future self is thanking you! 🚀</Text>
+
+                <View className="items-center mb-16">
+                    <View className="w-48 h-48 bg-white border-[3px] border-black items-center justify-center">
+                        <Text className="text-black text-8xl font-geist-b">{storyData.daysActive}</Text>
+                        <Text className="text-black text-base font-geist-sb uppercase tracking-widest mt-[8px]">Day Streak</Text>
+                    </View>
+                </View>
+
+                <View className="w-full">
+                    <Text className="text-black text-4xl font-geist-b uppercase leading-[40px] tracking-tight text-center">
+                        CONSISTENCY IS{"\n"}
+                        <StrokeText 
+                            text="YOUR SUPERPOWER."
+                            color="#FF7A00" 
+                            strokeColor="#22c55e" 
+                            className="text-5xl text-[#FF7A00] font-geist-b uppercase text-center"
+                        />
+                    </Text>
+                </View>
+
+                <View className="mt-16 self-center">
+                    <View className="bg-[#FF7A00] border-[2px] border-black p-4 py-2.5">
+                        <Text className="text-white font-geist-sb text-center">
+                            You're in the top {storyData.percentile}% of disciplined users!
+                        </Text>
+                    </View>
+                </View>
             </View>,
-            <View key={4} className="flex-1 items-center justify-center px-10">
-                <Text className="text-white/80 text-lg font-geist-md mb-2">Your Finale</Text>
-                <Text className="text-white text-4xl font-geist-b text-center mb-12">Ready for next month?</Text>
-                <View className="w-full bg-white p-8 rounded-[40px] items-center">
-                    <View className="w-16 h-16 rounded-2xl bg-orange-50 items-center justify-center mb-6">
-                        <Star size={32} color="#FF6A00" />
+            <View key={5} className="flex-1 px-8 pt-10">
+                <View className="mb-6 items-center">
+                    <View className="bg-white border-[2px] border-black px-8 py-2.5">
+                        <Text className="text-black font-geist-b text-xl uppercase tracking-loose">THE FINALE</Text>
                     </View>
-                    <Text className="text-gray-400 text-xs font-geist-sb uppercase mb-1">Financial Health</Text>
-                    <Text className="text-gray-900 text-3xl font-geist-b mb-6">Looking Solid!</Text>
-                    <View className="w-full gap-3">
-                        <View className="flex-row justify-between items-center py-3 border-b border-gray-100">
-                            <Text className="text-gray-500 font-geist-md">Total Flow</Text>
-                            <Text className="text-gray-900 font-geist-b">₹{(storyData.totalIncome + storyData.totalExpense).toLocaleString()}</Text>
+                </View>
+
+                <View className="bg-white border-[3px] border-black p-6 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
+                    <Text className="text-black/40 text-[10px] font-geist-b uppercase tracking-widest mb-4">{currentMonth} {currentYear} Report</Text>
+                    
+                    <View className="gap-4">
+                        <View className="flex-row justify-between items-center border-b-[2px] border-black/10 pb-3">
+                            <Text className="text-black font-geist-b text-base uppercase">Income</Text>
+                            <Text className="text-green-600 font-geist-b text-xl">{currency.symbol}{storyData.totalIncome.toLocaleString()}</Text>
                         </View>
-                        <View className="flex-row justify-between items-center py-3">
-                            <Text className="text-gray-500 font-geist-md">Net Surprise</Text>
-                            <Text className={`font-geist-b ${storyData.balance >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                ₹{Math.abs(storyData.balance).toLocaleString()}
+
+                        <View className="flex-row justify-between items-center border-b-[2px] border-black/10 pb-3">
+                            <Text className="text-black font-geist-b text-base uppercase">Expenses</Text>
+                            <Text className="text-red-500 font-geist-b text-xl">{currency.symbol}{storyData.totalExpense.toLocaleString()}</Text>
+                        </View>
+
+                        <View className="flex-row justify-between items-center border-b-[2px] border-black/10 pb-3">
+                            <Text className="text-black font-geist-b text-base uppercase">Net Balance</Text>
+                            <Text className={`font-geist-b text-xl ${storyData.balance >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {storyData.balance >= 0 ? '+' : '-'}{currency.symbol}{Math.abs(storyData.balance).toLocaleString()}
                             </Text>
                         </View>
+
+                        <View className="flex-row justify-between items-center border-b-[2px] border-black/10 pb-3">
+                            <Text className="text-black font-geist-b text-base uppercase">Top Category</Text>
+                            <Text className="text-black font-geist-b text-xl">{storyData.topCategory}</Text>
+                        </View>
+
+                        <View className="flex-row justify-between items-center border-b-[2px] border-black/10 pb-3">
+                            <Text className="text-black font-geist-b text-base uppercase">Streak</Text>
+                            <Text className="text-[#FF7A00] font-geist-b text-xl">{storyData.daysActive} Days</Text>
+                        </View>
+
+                        <View className="flex-row justify-between items-center">
+                            <Text className="text-black font-geist-b text-base uppercase">Ranking</Text>
+                            <Text className="text-black font-geist-b text-xl">Top {storyData.percentile}%</Text>
+                        </View>
                     </View>
-                    <TouchableOpacity onPress={handleShare} className="w-full bg-[#FF6A00] py-4 rounded-[100px] mt-8 flex-row items-center justify-center shadow-lg shadow-orange-500/30">
-                        <Share2 size={18} color="white" />
-                        <Text className="text-white font-geist-b ml-2">Share My Story</Text>
-                    </TouchableOpacity>
+
+                    <View className="flex-row gap-3 mt-10">
+                        <TouchableOpacity 
+                            onPress={handleShareToInstagram} 
+                            className="flex-1 bg-black py-4 flex-row items-center justify-center border-[2px] border-black"
+                        >
+                            <Text className="text-white font-geist-b text-sm uppercase ml-2 tracking-wider">Share Story</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                <TouchableOpacity onPress={() => router.back()} className="mt-8">
-                    <Text className="text-white/60 font-geist-md">Done for now</Text>
+
+                <TouchableOpacity 
+                    onPress={() => router.back()} 
+                    className="mt-10 self-center border-b border-black"
+                >
+                    <Text className="text-black font-geist-md tracking-widest uppercase">End Story</Text>
                 </TouchableOpacity>
             </View>,
         ];
     }, [storyData, handleShare, router]);
 
-    if (isLoading || !storyData) {
+    if (isSummaryLoading || isStreakLoading || !storyData) {
         return <StorySkeleton />;
     }
 
@@ -402,49 +544,66 @@ export default function MoneyStory() {
     return (
         <View style={{ flex: 1, backgroundColor: 'black' }}>
             <StatusBar barStyle="light-content" />
-            {/* Background Gradients & Images */}
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: currentIndex === 0 || currentIndex === 1 ? '#111' : STORY_COLORS[currentIndex][0] }]}>
-                {currentIndex === 0 || currentIndex === 1 ? (
-                    <View style={StyleSheet.absoluteFill}>
-                        <Image 
-                            source={currentIndex === 0 ? require("../assets/money_story2.jpeg") : require("../assets/money_story3.jpeg")} 
-                            style={{ width: '100%', height: '100%' }}
-                            resizeMode="cover"
-                        />
-                        <View style={[StyleSheet.absoluteFill, { backgroundColor: currentIndex === 0 ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.1)' }]} />
-                    </View>
-                ) : (
-                    <View 
-                        style={[
-                            StyleSheet.absoluteFill, 
-                            { 
-                                backgroundColor: STORY_COLORS[currentIndex][1], 
-                                opacity: 0.6 
-                            }
-                        ]} 
-                    />
-                )}
-            </View>
 
             <SafeAreaView className="flex-1" edges={['top']}>
                 <View className="flex-row gap-1.5 px-4 mt-2">
                     {cards.map((_, i) => (
-                        <ProgressBarItem key={i} index={i} activeIndex={activeIndex.value} progress={progress} />
+                        <ProgressBarItem key={i} index={i} currentIndex={currentIndex} progress={progress} />
                     ))}
                 </View>
 
-                <View className="flex-row items-center justify-between px-6 py-4">
-                    <View className="flex-row items-center">
-                        <Text className="text-white font-geist-sb">Money Story</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => router.back()} className="w-8 h-8 rounded-full bg-black/20 items-center justify-center">
+                <View style={{ flex: 1 }}>
+                    <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1 }} style={{ flex: 1 }}>
+                        {/* Background Image inside ViewShot for capture */}
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: currentIndex === 0 ? '#111' : (currentIndex <= 5 ? '#111' : STORY_COLORS[currentIndex][0]) }]}>
+                            {currentIndex <= 5 ? (
+                                <View style={StyleSheet.absoluteFill}>
+                                    <Image 
+                                        source={
+                                            currentIndex === 0 ? require("../assets/money_story1.jpeg") : 
+                                            currentIndex === 1 ? require("../assets/money_story2.jpeg") : 
+                                            currentIndex === 2 ? require("../assets/money_story3.jpeg") : 
+                                            currentIndex === 3 ? require("../assets/money_story4.jpeg") :
+                                            currentIndex === 4 ? require("../assets/money_story5.jpeg") :
+                                            require("../assets/money_story6.jpeg")
+                                        } 
+                                        style={{ width: '100%', height: '100%' }}
+                                        resizeMode="cover"
+                                    />
+                                </View>
+                            ) : (
+                                <View 
+                                    style={[
+                                        StyleSheet.absoluteFill, 
+                                        { 
+                                            backgroundColor: currentIndex === 0 ? '#000' : (STORY_COLORS[currentIndex]?.[1] || '#000'), 
+                                            opacity: currentIndex === 0 ? 1 : 0.6 
+                                        }
+                                    ]} 
+                                />
+                            )}
+                        </View>
+
+                        {/* Logo header inside ViewShot */}
+                        <View className="flex-row items-center px-6 py-4">
+                            <Image source={require("../assets/logo.png")} className="w-6 h-6 rounded mr-2" />
+                            <Text className="text-black font-geist-sb text-base mb-0.5 tracking-wide">ExpensePal</Text>
+                        </View>
+
+                        <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} className="flex-1">
+                            {cards[currentIndex]}
+                        </Pressable>
+                    </ViewShot>
+
+                    {/* X button outside ViewShot so it won't appear in screenshot */}
+                    <TouchableOpacity 
+                        onPress={() => router.back()} 
+                        className="w-8 h-8 rounded-full bg-black/20 items-center justify-center"
+                        style={{ position: 'absolute', top: 16, right: 24 }}
+                    >
                         <X size={20} color="white" />
                     </TouchableOpacity>
                 </View>
-
-                <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} className="flex-1">
-                    {cards[currentIndex]}
-                </Pressable>
             </SafeAreaView>
         </View>
     );
