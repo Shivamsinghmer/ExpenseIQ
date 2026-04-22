@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from "react";
-import BottomSheet from "@gorhom/bottom-sheet";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 
 interface InitialData {
     image?: string;
+    base64?: string;
     title?: string;
     amount?: string;
+    type?: "INCOME" | "EXPENSE";
 }
 
 interface SheetContextType {
@@ -12,7 +14,7 @@ interface SheetContextType {
     initialData: InitialData | null;
     openSheet: (data?: InitialData) => void;
     closeSheet: () => void;
-    sheetRef: React.RefObject<BottomSheet | null>;
+    sheetRef: React.RefObject<BottomSheetModal | null>;
 }
 
 const SheetContext = createContext<SheetContextType | undefined>(undefined);
@@ -20,18 +22,18 @@ const SheetContext = createContext<SheetContextType | undefined>(undefined);
 export function SheetProvider({ children }: { children: React.ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
     const [initialData, setInitialData] = useState<InitialData | null>(null);
-    const sheetRef = useRef<BottomSheet>(null);
+    const sheetRef = useRef<BottomSheetModal>(null);
 
     const openSheet = useCallback((data?: InitialData) => {
         setInitialData(data || null);
         setIsOpen(true);
-        sheetRef.current?.snapToIndex(0);
+        sheetRef.current?.present();
     }, []);
 
     const closeSheet = useCallback(() => {
         setIsOpen(false);
         setInitialData(null);
-        sheetRef.current?.close();
+        sheetRef.current?.dismiss();
     }, []);
 
     return (

@@ -29,8 +29,11 @@ import {
     paymentsAPI,
     budgetsAPI,
     envelopesAPI,
+    scanAPI,
     type CreateTransactionData,
+    type ScannedTransaction,
 } from "../services/api";
+import { MultiScanPreviewModal } from "./MultiScanPreviewModal";
 import {
     X, Check, Camera, Image as ImageIcon, MessageSquare,
     ChevronRight, CalendarDays, MapPin, Users,
@@ -43,6 +46,7 @@ import {
 
 import { StreakCelebration } from "./StreakCelebration";
 import { useCurrency } from "../providers/CurrencyProvider";
+import { useModal } from "../providers/ModalProvider";
 
 const AVATARS = [
     require('../assets/friend.png'),
@@ -64,8 +68,10 @@ interface AddExpenseSheetProps {
     smsData?: string;
     initialData?: {
         image?: string;
+        base64?: string;
         title?: string;
         amount?: string;
+        type?: "INCOME" | "EXPENSE";
     } | null;
 }
 
@@ -86,7 +92,7 @@ const QUICK_CATEGORIES = [
     { name: "Other", icon: MoreHorizontal, color: "#ADB5BD" },
 ];
 
-const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
+const AddExpenseSheet = forwardRef<BottomSheetModal, AddExpenseSheetProps>(
     ({ onClose, onSMSPress, onUpgrade, smsData, initialData }, ref) => {
         const queryClient = useQueryClient();
         const { currency } = useCurrency();
@@ -105,7 +111,13 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         const [location, setLocation] = useState<string | null>(null);
         const [isSplit, setIsSplit] = useState(false);
         const [date] = useState(new Date());
+        const { showModal, hideModal } = useModal();
+
+        const [isScanning, setIsScanning] = useState(false);
         const [scannedImage, setScannedImage] = useState<string | null>(null);
+        const [multiScanTransactions, setMultiScanTransactions] = useState<ScannedTransaction[]>([]);
+        const multiScanSheetRef = useRef<BottomSheetModal>(null);
+
         const [reachedMilestone, setReachedMilestone] = useState<any | null>(null);
         const [currentStreakAfterTransaction, setCurrentStreakAfterTransaction] = useState<number>(0);
 
@@ -123,15 +135,22 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         useEffect(() => {
             if (initialData) {
                 if (initialData.image) setScannedImage(initialData.image);
+                if (initialData.base64) {
+                    processScannedImage(initialData.base64);
+                }
                 if (initialData.title) {
-                    setQuickAddText(initialData.title);
-                    // Attempt to auto-categorize from initial title
+                    const formattedTitle = initialData.type === "INCOME" 
+                        ? `Received from ${initialData.title}` 
+                        : `Paid to ${initialData.title}`;
+                    setQuickAddText(formattedTitle);
+                    // Attempt to auto-categorize from original title
                     const matched = QUICK_CATEGORIES.find(c => 
                         initialData.title?.toLowerCase().includes(c.name.toLowerCase())
                     );
                     if (matched) setSelectedCategory(matched.name);
                 }
                 if (initialData.amount) setAmount(initialData.amount);
+                if (initialData.type) setType(initialData.type);
             } else {
                 setScannedImage(null);
             }
@@ -215,18 +234,18 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                     setReachedMilestone(newMilestone);
                     // We don't call onClose() yet, let the celebration handle it
                 } else {
-                    Alert.alert("Success", "Transaction added!");
+                    showModal("Success", "Transaction added!");
                     onClose();
                 }
             },
             onError: (error: any) => {
                 if (error.response?.status === 403) {
-                    Alert.alert("Trial Expired", "Upgrade to Pro to continue.", [
-                        { text: "Cancel", style: "cancel" },
+                    showModal("Trial Expired", "Upgrade to Pro to continue.", [
+                        { text: "Cancel", onPress: () => {}, style: "cancel" },
                         { text: "Upgrade", onPress: onUpgrade },
                     ]);
                 } else {
-                    Alert.alert("Error", error.response?.data?.error || "Failed to add transaction");
+                    showModal("Error", error.response?.data?.error || "Failed to add transaction");
                 }
             },
         });
@@ -247,10 +266,10 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
 
         const handleSubmit = () => {
             if (totalBudget === 0) {
-                Alert.alert(
+                showModal(
                     "Budget Required",
                     "Please set your monthly budget directly from the Home Dashboard or Transactions panel before adding expenses.",
-                    [{ text: "OK", style: "default" }]
+                    [{ text: "OK", onPress: () => {}, style: "default" }]
                 );
                 return;
             }
@@ -262,7 +281,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             const parsedAmount = parseFloat(cleanAmount);
 
             if (!parsedAmount || parsedAmount <= 0) { 
-                Alert.alert("Error", "Please enter a valid amount"); 
+                showModal("Error", "Please enter a valid amount"); 
                 return; 
             }
 
@@ -300,42 +319,87 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             createMutation.mutate(mutationData);
         };
 
+        const handleSheetChange = useCallback((index: number) => {
+            if (index === -1) {
+                onClose();
+                resetForm();
+            }
+        }, [onClose]);
+
+        const processScannedImage = async (base64: string) => {
+            try {
+                setIsScanning(true);
+                const res = await scanAPI.scanReceipt(base64);
+                const { documentType, transactions } = res.data;
+
+                if (!transactions || transactions.length === 0) {
+                    showModal("Scan Result", "No transactions detected in the image.");
+                    return;
+                }
+
+                if (documentType === "STATEMENT" || transactions.length > 1) {
+                    // Show multi-selection bottom sheet
+                    setMultiScanTransactions(transactions);
+                    multiScanSheetRef.current?.present();
+                } else {
+                    // Auto-fill form for single receipt
+                    const data = transactions[0];
+                    if (data.amount) setAmount(data.amount.toString());
+                    if (data.merchant) {
+                        const formatted = data.type === "INCOME" ? `Received from ${data.merchant}` : `Paid to ${data.merchant}`;
+                        setQuickAddText(formatted);
+                        
+                        // Auto-categorize
+                        const matched = QUICK_CATEGORIES.find(c => 
+                            data.merchant.toLowerCase().includes(c.name.toLowerCase())
+                        );
+                        if (matched) setSelectedCategory(matched.name);
+                    }
+                    if (data.type) setType(data.type);
+                }
+            } catch (error: any) {
+                console.error("Scanning Error:", error);
+                showModal("Scan Failed", "We couldn't read the details from this image. Please enter manually.");
+            } finally {
+                setIsScanning(false);
+            }
+        };
+
         const handleCamera = async () => {
             const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
             if (permissionResult.granted === false) {
-                Alert.alert("Permission Required", "Camera access is needed to scan receipts.");
+                showModal("Permission Required", "Camera access is needed to scan receipts.");
                 return;
             }
             const result = await ImagePicker.launchCameraAsync({
                 allowsEditing: true,
-                quality: 1,
+                quality: 0.7,
+                base64: true,
             });
-            if (!result.canceled) {
-                Alert.alert("Scan Started", "Processing receipt image...");
+            if (!result.canceled && result.assets[0].base64) {
+                setScannedImage(result.assets[0].uri);
+                processScannedImage(result.assets[0].base64);
             }
         };
 
         const handlePhotos = async () => {
             const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (permissionResult.granted === false) {
-                Alert.alert("Permission Required", "Photo library access is needed.");
+                showModal("Permission Required", "Photo library access is needed.");
                 return;
             }
             const result = await ImagePicker.launchImageLibraryAsync({
                 allowsEditing: true,
-                quality: 1,
+                quality: 0.7,
+                base64: true,
             });
-            if (!result.canceled) {
-                Alert.alert("Image Selected", "Processing receipt...");
+            if (!result.canceled && result.assets[0].base64) {
+                setScannedImage(result.assets[0].uri);
+                processScannedImage(result.assets[0].base64);
             }
         };
 
-        const handleImport = () => {
-            Alert.alert("Import Statement", "Select a PDF or CSV bank statement to process.", [
-                { text: "Cancel", style: "cancel" },
-                { text: "Select File", onPress: () => Alert.alert("Select", "File picker coming soon!") }
-            ]);
-        };
+
 
         const [isLocating, setIsLocating] = useState(false);
 
@@ -344,7 +408,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                 setIsLocating(true);
                 let { status } = await Location.requestForegroundPermissionsAsync();
                 if (status !== 'granted') {
-                    Alert.alert('Permission Denied', 'Permission to access location was denied');
+                    showModal('Permission Denied', 'Permission to access location was denied');
                     return;
                 }
 
@@ -384,7 +448,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                     setLocation("Unknown Address");
                 }
             } catch (error) {
-                Alert.alert('Location Error', 'Failed to get your location.');
+                showModal('Sorry!', 'Failed to get your location. Try again!', [{ text: 'Okay', onPress: () => {} }]);
             } finally {
                 setIsLocating(false);
             }
@@ -408,19 +472,19 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
 
         return (
             <>
-            <BottomSheet
+            <BottomSheetModal
                 ref={ref}
-                index={-1}
                 snapPoints={snapPoints}
                 enablePanDownToClose
                 backdropComponent={renderBackdrop}
-                onClose={onClose}
-                handleIndicatorStyle={{ backgroundColor: "#d1d5db", width: 40 }}
+                onChange={handleSheetChange}
+                keyboardBehavior="fillParent"
+                android_keyboardInputMode="adjustResize"
                 backgroundStyle={{ backgroundColor: "#F5F5F5", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
             >
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-5 pb-4">
-                    <TouchableOpacity onPress={() => { (ref as any)?.current?.close(); onClose(); }}>
+                    <TouchableOpacity onPress={() => { (ref as any)?.current?.dismiss(); onClose(); }}>
                         <X size={22} color="#6B7280" />
                     </TouchableOpacity>
                     <Text className="text-gray-900 text-lg font-geist-b">Add Expense</Text>
@@ -459,23 +523,27 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                             <View className="mt-4 rounded-xl overflow-hidden border border-gray-100 h-32 bg-gray-50 flex-row">
                                 <Image 
                                     source={{ uri: scannedImage }} 
-                                    style={{ width: 80, height: '100%' }}
+                                    style={{ width: 100, height: '100%' }}
                                     resizeMode="cover"
                                 />
                                 <View className="flex-1 p-3 justify-center">
                                     <View className="flex-row items-center mb-1">
                                         <Check size={14} color="#22c55e" />
-                                        <Text className="text-gray-700 text-[10px] font-geist-sb ml-1 uppercase">Receipt Scanned</Text>
+                                        <Text className="text-gray-700 text-[10px] font-geist-sb ml-1 uppercase">
+                                            {isScanning ? "Scanning..." : "Receipt Scanned"}
+                                        </Text>
                                     </View>
-                                    <Text className="text-gray-400 text-[10px] font-geist-md italic">
-                                        Processing details...
+                                    <Text className="text-gray-400 text-[10px] font-geist-md">
+                                        {isScanning ? "AI is analyzing your document..." : "Details extracted successfully"}
                                     </Text>
-                                    <TouchableOpacity 
-                                        onPress={() => setScannedImage(null)}
-                                        className="mt-2"
-                                    >
-                                        <Text className="text-red-500 text-[10px] font-geist-sb">Remove Photo</Text>
-                                    </TouchableOpacity>
+                                    {!isScanning && (
+                                        <TouchableOpacity 
+                                            onPress={() => setScannedImage(null)}
+                                            className="mt-2"
+                                        >
+                                            <Text className="text-red-500 text-[11px] font-geist-sb">Remove Photo</Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             </View>
                         )}
@@ -499,11 +567,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                             </TouchableOpacity>
                         </View>
 
-                        {/* Import Statement */}
-                        <TouchableOpacity onPress={handleImport} className="flex-row items-center mt-3 bg-orange-50 rounded-xl py-3 px-4">
-                            <Text className="text-[#FF6A00] text-sm font-geist-sb flex-1">📄 Import Statement</Text>
-                            <ChevronRight size={16} color="#FF6A00" />
-                        </TouchableOpacity>
+
                     </View>
 
                     {/* Date & Time / Location */}
@@ -850,7 +914,21 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                         </TouchableOpacity>
                     </View>
                 </BottomSheetScrollView>
-            </BottomSheet>
+            </BottomSheetModal>
+
+
+
+            <MultiScanPreviewModal
+                ref={multiScanSheetRef}
+                transactions={multiScanTransactions}
+                onClose={() => multiScanSheetRef.current?.dismiss()}
+                onUpgrade={onUpgrade}
+                onSuccess={(count: number) => {
+                    multiScanSheetRef.current?.dismiss();
+                    onClose();
+                    showModal("Success", `Successfully imported ${count} transactions from scan!`, [{ text: "Great", onPress: hideModal }]);
+                }}
+            />
 
             <StreakCelebration 
                 isVisible={!!reachedMilestone}

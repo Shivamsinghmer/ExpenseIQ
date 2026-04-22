@@ -10,6 +10,9 @@ import emiRoutes from "./routes/emis";
 import envelopeRoutes from "./routes/envelopes";
 import streakRoutes from "./routes/streaks";
 import budgetRoutes from "./routes/budgets";
+import smsRoutes from "./routes/sms";
+import scanRoutes from "./routes/scan";
+
 
 console.log("--- Environment Verification ---");
 console.log("Server restarting...");
@@ -25,7 +28,7 @@ app.use(cors({
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
 }));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
 
 // Request logging
 app.use((req, _res, next) => {
@@ -50,6 +53,9 @@ app.use("/api/emis", emiRoutes);
 app.use("/api/envelopes", envelopeRoutes);
 app.use("/api/streaks", streakRoutes);
 app.use("/api/budgets", budgetRoutes);
+app.use("/api/sms", smsRoutes);
+app.use("/api/scan", scanRoutes);
+
 
 // 404 handler
 app.use((_req, res) => {

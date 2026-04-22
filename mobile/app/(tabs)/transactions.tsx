@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef, useCallback } from "react";
 import {
     View, Text, FlatList, TouchableOpacity, RefreshControl,
-    ActivityIndicator, Alert, TextInput, ScrollView, SectionList,
+    ActivityIndicator, TextInput, ScrollView, SectionList,
     Modal, TouchableWithoutFeedback
 } from "react-native";
+import { useModal } from "../../providers/ModalProvider";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
 import { 
@@ -79,6 +80,7 @@ const CATEGORY_ICONS: Record<string, any> = {
 };
 
 export default function Transactions() {
+    const { showModal, hideModal } = useModal();
     const router = useRouter();
     const queryClient = useQueryClient();
     const budgetSheetRef = useRef<BottomSheet>(null);
@@ -389,12 +391,15 @@ export default function Transactions() {
                                                 remainingBudget={getRemainingBudget(tx.category)}
                                                 onDelete={(id) => {
                                                     if (isExpired) {
-                                                        Alert.alert("Trial Expired", "Upgrade to Pro to delete transactions.");
+                                                        showModal("Trial Expired", "Upgrade to Pro to delete transactions.");
                                                         return;
                                                     }
-                                                    Alert.alert("Delete Transaction", `Are you sure you want to delete "${tx.title}"?`, [
-                                                        { text: "Cancel", style: "cancel" },
-                                                        { text: "Delete", style: "destructive", onPress: () => deleteMutation.mutate(id) },
+                                                    showModal("Delete Transaction", `Are you sure you want to delete "${tx.title}"?`, [
+                                                        { text: "Cancel", onPress: hideModal, style: "cancel" },
+                                                        { text: "Delete", style: "destructive", onPress: () => {
+                                                            hideModal();
+                                                            deleteMutation.mutate(id);
+                                                        }},
                                                     ]);
                                                 }}
                                                 isExpired={isExpired}

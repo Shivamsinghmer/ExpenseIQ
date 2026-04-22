@@ -5,7 +5,6 @@ import {
     ScrollView,
     TouchableOpacity,
     RefreshControl,
-    Alert,
     Platform,
     Dimensions,
     Image,
@@ -33,6 +32,7 @@ import {
 } from "lucide-react-native";
 import { TransactionItem } from "../../components/TransactionItem";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useModal } from "../../providers/ModalProvider";
 
 
 const CATEGORY_ICONS: Record<string, any> = {
@@ -176,21 +176,48 @@ export default function Dashboard() {
         }
     });
 
-    const handleScanAndRecord = async () => {
-        const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-        if (permissionResult.granted === false) {
-            Alert.alert("Permission Required", "Camera access is needed to scan receipts.");
-            return;
-        }
-
-        const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            quality: 1,
-        });
-
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            openSheet({ image: result.assets[0].uri });
-        }
+    const handleScanAndRecord = () => {
+        showAppModal("Choose Source", "How would you like to scan your receipt?", [
+            { text: "Cancel", onPress: hideAppModal, style: "cancel" },
+            { 
+                text: "Camera", 
+                onPress: async () => {
+                    hideAppModal();
+                    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+                    if (permissionResult.granted === false) {
+                        showAppModal("Permission Required", "Camera access is needed.", [{ text: "OK", onPress: hideAppModal }]);
+                        return;
+                    }
+                    const result = await ImagePicker.launchCameraAsync({
+                        allowsEditing: true,
+                        quality: 0.7,
+                        base64: true,
+                    });
+                    if (!result.canceled && result.assets[0].base64) {
+                        openSheet({ image: result.assets[0].uri, base64: result.assets[0].base64 });
+                    }
+                }
+            },
+            { 
+                text: "Photos", 
+                onPress: async () => {
+                    hideAppModal();
+                    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (permissionResult.granted === false) {
+                        showAppModal("Permission Required", "Photos access is needed.", [{ text: "OK", onPress: hideAppModal }]);
+                        return;
+                    }
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                        allowsEditing: true,
+                        quality: 0.7,
+                        base64: true,
+                    });
+                    if (!result.canceled && result.assets[0].base64) {
+                        openSheet({ image: result.assets[0].uri, base64: result.assets[0].base64 });
+                    }
+                }
+            }
+        ]);
     };
 
     const handleSignOut = async () => {
@@ -203,6 +230,8 @@ export default function Dashboard() {
     };
 
     const [range, setRange] = useState<"1W" | "1M" | "3M" | "1Y" | "All">("1M");
+
+    const { showModal: showAppModal, hideModal: hideAppModal } = useModal();
 
     const getDateRange = (): Record<string, string> | undefined => {
         const end = new Date();
@@ -268,7 +297,9 @@ export default function Dashboard() {
         try {
             setPdfLoading(true);
             if (!summary) {
-                Alert.alert("Error", "Dashboard data not ready. Please wait.");
+                showAppModal("Please wait", "Dashboard data not ready.", [
+                    { text: "Okay", onPress: hideAppModal }
+                ]);
                 return;
             }
 
@@ -276,7 +307,9 @@ export default function Dashboard() {
             const allTransactions = res.data.transactions;
 
             if (!allTransactions || allTransactions.length === 0) {
-                Alert.alert("No Data", "No transactions to export.");
+                showAppModal("It's empty", "No transactions to export.", [
+                    { text: "Okay", onPress: hideAppModal }
+                ]);
                 return;
             }
 
@@ -304,7 +337,9 @@ export default function Dashboard() {
                         await SAF.createFileAsync(permissions.directoryUri, fileName, 'application/pdf')
                             .then(async (safUri: string) => {
                                 await FileSystem.writeAsStringAsync(safUri, base64, { encoding: (FileSystem as any).EncodingType.Base64 });
-                                Alert.alert("Success", "Report downloaded successfully!");
+                                showAppModal("Success", "Report downloaded successfully!", [
+                                    { text: "Okay", onPress: hideAppModal }
+                                ]);
                             })
                             .catch((e: any) => {
                                 console.error(e);
@@ -326,7 +361,9 @@ export default function Dashboard() {
             }
         } catch (error: any) {
             console.error("PDF generation error:", error);
-            Alert.alert("Error", `Failed to generate PDF: ${error.message || "Unknown error"}`);
+            showAppModal("Sorry!", `Failed to generate PDF: ${error.message || "Unknown error"}`, [
+                { text: "Okay", onPress: hideAppModal }
+            ]);
         } finally {
             setPdfLoading(false);
         }
@@ -342,10 +379,10 @@ export default function Dashboard() {
                 ? Math.ceil((new Date(subscription.proExpiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
                 : 0;
 
-            Alert.alert(
+            showAppModal(
                 "Pro Subscription",
                 `You are a Pro member!\n\n${daysLeft > 0 ? `Your subscription expires in ${daysLeft} days.` : "Your subscription is active."}`,
-                [{ text: "OK" }]
+                [{ text: "OK", onPress: hideAppModal }]
             );
         } else {
             router.push("/subscription");
@@ -447,9 +484,12 @@ export default function Dashboard() {
 
                         <TouchableOpacity
                             onPress={() => {
-                                Alert.alert("Account", "Manage your account", [
-                                    { text: "Cancel", style: "cancel" },
-                                    { text: "Sign Out", style: "destructive", onPress: handleSignOut },
+                                showAppModal("Are you signing out?", "You can always sign back in at any time.", [
+                                    { text: "Cancel", onPress: hideAppModal, style: "cancel" },
+                                    { text: "Sign Out", style: "destructive", onPress: () => {
+                                        hideAppModal();
+                                        handleSignOut();
+                                    }},
                                 ]);
                             }}
                         >
@@ -582,19 +622,52 @@ export default function Dashboard() {
                         </View>
                         <Text className="text-gray-900 text-xs font-geist-sb">Ask Money</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                        onPress={() => router.push("/money-story")}
-                        activeOpacity={0.85}
-                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100 relative"
-                    >
-                        <View style={{ position: 'absolute', top: 8, right: 8 }}>
-                            <Timer size={16} color="#FF6A00" />
-                        </View>
-                        <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
-                            <Sparkles size={20} color="#FF6A00" />
-                        </View>
-                        <Text className="text-gray-900 text-xs font-geist-sb">Money Story</Text>
-                    </TouchableOpacity>
+                    <View className="flex-1 relative">
+                        <TouchableOpacity 
+                            onPress={() => {
+                                const today = new Date();
+                                const isLastDay = today.getDate() === new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+                                
+                                if (isLastDay) {
+                                    router.push("/money-story");
+                                } else {
+                                    showAppModal("Patience buddy", "Please wait for the end of the month to view your story.", [
+                                        { text: "Got it", onPress: hideAppModal }
+                                    ]);
+                                }
+                            }}
+                            activeOpacity={0.85}
+                            className="bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100 w-full"
+                        >
+                            <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                                <Sparkles size={20} color="#FF6A00" />
+                            </View>
+                            <Text className="text-gray-900 text-xs font-geist-sb">Money Story</Text>
+                        </TouchableOpacity>
+                        
+                        {(() => {
+                            const today = new Date();
+                            const isLastDay = today.getDate() === new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+                            if (isLastDay) return null;
+                            
+                            return (
+                                <View 
+                                    style={{ 
+                                        position: 'absolute', 
+                                        top: -4, 
+                                        right: -4, 
+                                        backgroundColor: 'white',
+                                        borderRadius: 12,
+                                        padding: 4,
+                                        borderWidth: 1,
+                                        borderColor: '#F3F4F6',
+                                    }}
+                                >
+                                    <Timer size={16} color="#FF6A00" />
+                                </View>
+                            );
+                        })()}
+                    </View>
                 </View>
                 <View className="flex-row gap-3">
                     <TouchableOpacity 

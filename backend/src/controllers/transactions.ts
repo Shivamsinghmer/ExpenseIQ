@@ -338,3 +338,52 @@ export async function getSummary(req: AuthenticatedRequest, res: Response): Prom
         res.status(500).json({ error: "Failed to fetch summary" });
     }
 }
+// POST bulk create transactions
+export async function bulkCreateTransactions(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+        const user = await getOrCreateUser(req.clerkUserId!);
+        const { transactions } = req.body;
+
+        if (!Array.isArray(transactions) || transactions.length === 0) {
+            res.status(400).json({ error: "Transactions array is required" });
+            return;
+        }
+
+        const access = checkUserAccess(user);
+        if (access === "expired") {
+            res.status(403).json({
+                message: "Trial expired. Please upgrade to Pro to use this feature."
+            });
+            return;
+        }
+
+        const createdTransactions = await prisma.transaction.createMany({
+            data: transactions.map((t: any) => ({
+                title: t.merchant || t.title,
+                amount: t.amount,
+                type: t.type as any,
+                category: t.category || "Other",
+                date: new Date(t.date),
+                userId: user.id,
+                notes: t.notes || "",
+            })),
+        });
+
+        // Update streak once for the batch
+        let newMilestone = null;
+        try {
+            newMilestone = await updateStreak(user.id);
+        } catch (error) {
+            console.error("Streak update error in bulk create:", error);
+        }
+
+        res.status(201).json({
+            success: true,
+            count: createdTransactions.count,
+            newMilestone
+        });
+    } catch (error) {
+        console.error("Bulk create transactions error:", error);
+        res.status(500).json({ error: "Failed to create transactions in bulk" });
+    }
+}

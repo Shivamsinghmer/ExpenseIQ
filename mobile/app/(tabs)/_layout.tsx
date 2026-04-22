@@ -1,12 +1,14 @@
 import { Tabs, useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
-import { View, Text, ActivityIndicator, TouchableOpacity, Platform, LayoutChangeEvent, Alert, TextInput, Modal, KeyboardAvoidingView } from "react-native";
+import { View, Text, ActivityIndicator, TouchableOpacity, Platform, LayoutChangeEvent, TextInput, Modal, KeyboardAvoidingView } from "react-native";
+import { useModal } from "../../providers/ModalProvider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Home, List, Plus, BarChart3, X, Search } from "lucide-react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from "react-native-reanimated";
 import AddExpenseSheet from "../../components/AddExpenseSheet";
 import BottomSheet from "@gorhom/bottom-sheet";
+import { smsAPI } from "../../services/api";
 
 const VISIBLE_TABS = ["dashboard", "transactions", "analytics"];
 
@@ -138,6 +140,7 @@ function CustomTabBar({ state, descriptors, navigation, onAddPress }: any) {
 import { useSheet } from "../../providers/sheet-provider";
 
 export default function TabsLayout() {
+    const { showModal, hideModal } = useModal();
     const { isSignedIn, isLoaded } = useAuth();
     const router = useRouter();
     const { sheetRef, openSheet, closeSheet, initialData } = useSheet();
@@ -145,28 +148,40 @@ export default function TabsLayout() {
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [smsModalVisible, setSmsModalVisible] = useState(false);
     const [pastedSMS, setPastedSMS] = useState("");
+    const [isParsing, setIsParsing] = useState(false);
     const [parsedAmount, setParsedAmount] = useState("");
     const [parsedTitle, setParsedTitle] = useState("");
 
-    const handleParseSMS = () => {
+    const handleParseSMS = async () => {
         if (!pastedSMS.trim()) {
-            Alert.alert("Error", "Please paste an SMS first.");
+            showModal("Sorry!", "Please paste an SMS first.");
             return;
         }
 
-        const amountMatch = pastedSMS.match(/(?:INR|Rs\.?|₹)\s?(\d+(?:,\d+)*(?:\.\d+)?)/i);
-        const merchantMatch = pastedSMS.match(/(?:at|to|vpa|merch:)\s*([A-Za-z0-9\s._-]+?)(?:\s*(?:on|using|via|for|ref|\d)|$)/i);
+        try {
+            setIsParsing(true);
+            const res = await smsAPI.parse(pastedSMS);
+            const parsedData = res.data;
 
-        if (amountMatch) {
-            setParsedAmount(amountMatch[1].replace(/,/g, ""));
+            if (parsedData.amount > 0 || parsedData.title !== "New Transaction") {
+                setSmsModalVisible(false);
+                setPastedSMS("");
+                
+                // Open the add transaction sheet with parsed data
+                openSheet({
+                    amount: parsedData.amount > 0 ? parsedData.amount.toString() : "",
+                    title: parsedData.title,
+                    type: parsedData.type === "DEBIT" ? "EXPENSE" : "INCOME"
+                });
+            } else {
+                showModal("Could not parse", "We couldn't extract enough details from this SMS. Please check the text.");
+            }
+        } catch (error) {
+            console.error("SMS Parsing Error:", error);
+            showModal("Error", "Failed to contact the parsing service.");
+        } finally {
+            setIsParsing(false);
         }
-        if (merchantMatch) {
-            setParsedTitle(merchantMatch[1].trim());
-        }
-
-        setPastedSMS("");
-        setSmsModalVisible(false);
-        Alert.alert("SMS Parsed", `Amount: ₹${amountMatch?.[1] || "N/A"}\nMerchant: ${merchantMatch?.[1]?.trim() || "N/A"}`);
     };
 
     useEffect(() => {
@@ -254,11 +269,16 @@ export default function TabsLayout() {
 
                                 <TouchableOpacity 
                                     onPress={handleParseSMS}
+                                    disabled={isParsing || !pastedSMS.trim()}
                                     className="w-full mt-6 py-4 rounded-[100px] bg-[#FF6A00] items-center justify-center flex-row"
                                     activeOpacity={0.85}
+                                    style={{ opacity: isParsing || !pastedSMS.trim() ? 0.6 : 1 }}
                                 >
-                                    <Search size={18} color="#fff" />
-                                    <Text className="text-white font-geist-b text-base ml-2">Parse SMS</Text>
+                                    {isParsing ? (
+                                        <ActivityIndicator color="#fff" size="small" />
+                                    ) : (
+                                        <Text className="text-white font-geist-b text-base ml-2">Parse SMS</Text>
+                                    )}
                                 </TouchableOpacity>
                             </View>
                         </View>

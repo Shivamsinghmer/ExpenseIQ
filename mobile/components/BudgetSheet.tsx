@@ -1,10 +1,11 @@
 import React, { forwardRef, useMemo, useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator } from "react-native";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Check, Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon, Zap, HeartPulse, Plane, Gamepad2, GraduationCap, Gift, TrendingUp, Wallet, MoreHorizontal } from "lucide-react-native";
 import { budgetsAPI } from "../services/api";
 import { useCurrency } from "../providers/CurrencyProvider";
+import { useModal } from "../providers/ModalProvider";
 
 const CATEGORIES = [
     { name: "Food", icon: Utensils, color: "#FF6B6B" },
@@ -26,6 +27,7 @@ const CATEGORIES = [
 export const BudgetSheet = forwardRef<BottomSheet, { onClose: () => void, onChange?: (index: number) => void }>(({ onClose, onChange }, ref) => {
     const queryClient = useQueryClient();
     const { currency } = useCurrency();
+    const { showModal, hideModal } = useModal();
     const snapPoints = useMemo(() => ["85%"], []);
 
     const { data: budgetsData, isLoading } = useQuery({
@@ -67,11 +69,11 @@ export const BudgetSheet = forwardRef<BottomSheet, { onClose: () => void, onChan
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["budgets"] });
             queryClient.invalidateQueries({ queryKey: ["summary"] }); // To refresh analytics
-            Alert.alert("Success", "Budgets updated.");
+            showModal("Success", "Budgets have been updated.", [{ text: "Okay", onPress: hideModal }]);
             onClose();
         },
         onError: () => {
-            Alert.alert("Error", "Failed to update budgets.");
+            showModal("Oops!", "Failed to update budgets.", [{ text: "Okay", onPress: hideModal }]);
         }
     });
 

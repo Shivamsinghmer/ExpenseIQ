@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { 
-    View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Platform, Dimensions,
+    View, Text, Pressable, ScrollView, ActivityIndicator, Platform, Dimensions,
     Modal, TouchableWithoutFeedback, TouchableOpacity
 } from "react-native";
+import { useModal } from "../providers/ModalProvider";
 import { useTheme } from "../providers/theme-provider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { 
@@ -47,6 +48,7 @@ const { width } = Dimensions.get("window");
 
 export default function SubscriptionScreen() {
     const router = useRouter();
+    const { showModal } = useModal();
     const { isDark } = useTheme();
     const insets = useSafeAreaInsets();
     const [loading, setLoading] = useState(false);
@@ -109,15 +111,15 @@ export default function SubscriptionScreen() {
                             const token = await getToken();
                             if (token) setAuthToken(token);
                             await paymentsAPI.verifyOrder(orderId);
-                            Alert.alert("Welcome to Pro!", "Experience the full power of ExpensePal.");
+                            showModal("Welcome to Pro!", "Experience the full power of ExpensePal.");
                             await checkSubscriptionStatus();
                             handleBack();
                         } catch (err) {
-                            Alert.alert("Payment Pending", "Your subscription is being activated.");
+                            showModal("Payment Pending", "Your subscription is being activated.");
                         }
                     },
                     onError: (error: any, orderId: string) => {
-                        Alert.alert("Payment Failed", error.getMessage ? error.getMessage() : "Something went wrong.");
+                        showModal("Payment Failed", error.getMessage ? error.getMessage() : "Something went wrong.");
                     }
                 });
             } catch (e) {}
@@ -145,7 +147,7 @@ export default function SubscriptionScreen() {
             const dropCheckoutPayment = new CFDropCheckoutPayment(session, paymentComponent, theme);
             CFPaymentGatewayService.doPayment(dropCheckoutPayment);
         } catch (error: any) {
-            Alert.alert("Error", "Failed to initiate payment.");
+            showModal("Oh no!", "Failed to initiate payment.");
         } finally {
             setLoading(false);
         }

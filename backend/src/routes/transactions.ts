@@ -7,6 +7,7 @@ import {
     updateTransaction,
     deleteTransaction,
     getSummary,
+    bulkCreateTransactions,
 } from "../controllers/transactions";
 
 const router = Router();
@@ -17,6 +18,7 @@ router.get("/summary", getSummary as any);
 router.get("/", getTransactions as any);
 router.get("/:id", getTransaction as any);
 router.post("/", createTransaction as any);
+router.post("/bulk", bulkCreateTransactions as any);
 router.put("/:id", updateTransaction as any);
 router.delete("/:id", deleteTransaction as any);
 

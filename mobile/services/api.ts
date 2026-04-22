@@ -131,6 +131,8 @@ export const transactionsAPI = {
     delete: (id: string) => api.delete(`/transactions/${id}`),
     getSummary: (params?: Record<string, string>) =>
         api.get<SummaryResponse>("/transactions/summary", { params }),
+    bulkCreate: (data: any[]) =>
+        api.post("/transactions/bulk", { transactions: data }),
 };
 
 
@@ -264,6 +266,38 @@ export const budgetsAPI = {
 export const usersAPI = {
     updateCurrency: (currencyCode: string, currencySymbol: string) =>
         api.put("/users/currency", { currencyCode, currencySymbol }),
+};
+
+// SMS Parsing
+export interface ParsedSMS {
+    amount: number;
+    title: string;
+    type: "DEBIT" | "CREDIT";
+    date?: string;
+    currency?: string;
+}
+
+export const smsAPI = {
+    parse: (text: string) => api.post<ParsedSMS>("/sms/parse", { text }),
+};
+
+// Receipt Scanning
+export interface ScannedTransaction {
+    amount: number;
+    merchant: string;
+    type: "EXPENSE" | "INCOME";
+    date?: string;
+    currency?: string;
+    category?: string;
+}
+
+export interface ScannedReceiptResponse {
+    documentType: "RECEIPT" | "STATEMENT";
+    transactions: ScannedTransaction[];
+}
+
+export const scanAPI = {
+    scanReceipt: (base64Image: string) => api.post<ScannedReceiptResponse>("/scan/receipt", { image: base64Image }),
 };
 
 export default api;
