@@ -1,10 +1,14 @@
-import React, { useState, useEffect, forwardRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, forwardRef, useMemo, useCallback, useRef } from "react";
 import {
     View,
     Text,
     TouchableOpacity,
     TextInput,
     ActivityIndicator,
+    Modal,
+    TouchableWithoutFeedback,
+    Dimensions,
+    ScrollView,
 } from "react-native";
 import { 
     BottomSheetModal, 
@@ -12,10 +16,11 @@ import {
     BottomSheetBackdrop,
     BottomSheetTextInput 
 } from "@gorhom/bottom-sheet";
-import { X, Check, Trash2, Calendar, ShoppingBag } from "lucide-react-native";
+import { X, Check, Trash2, Calendar, ShoppingBag, TrendingUp, TrendingDown, ChevronRight } from "lucide-react-native";
 import { ScannedTransaction, transactionsAPI, paymentsAPI } from "../services/api";
 import { useCurrency } from "../providers/CurrencyProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { QUICK_CATEGORIES } from "./AddExpenseSheet";
 
 interface Props {
     transactions: ScannedTransaction[];
@@ -24,12 +29,31 @@ interface Props {
     onUpgrade: () => void;
 }
 
+const toTitleCase = (str: string) => {
+    if (!str) return str;
+    // If it's all uppercase, convert to title case
+    if (str === str.toUpperCase()) {
+        return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    }
+    return str;
+};
+
+const formatDate = () => {
+    return new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+};
+
 export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ transactions: initialTransactions, onClose, onSuccess, onUpgrade }, ref) => {
     const { currency } = useCurrency();
     const queryClient = useQueryClient();
     const [transactions, setTransactions] = useState<ScannedTransaction[]>([]);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [isImporting, setIsImporting] = useState(false);
+
+    // Dropdown state
+    const [openTypeIndex, setOpenTypeIndex] = useState<number | null>(null);
+    const [openCategoryIndex, setOpenCategoryIndex] = useState<number | null>(null);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+    const triggerRefs = useRef<Record<string, View | null>>({});
 
     const { data: subscription } = useQuery({
         queryKey: ["subscriptionStatus"],
@@ -44,7 +68,13 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
     const snapPoints = useMemo(() => ["90%"], []);
 
     useEffect(() => {
-        setTransactions(initialTransactions);
+        const processed = initialTransactions.map(t => ({
+            ...t,
+            merchant: toTitleCase(t.merchant || ""),
+            type: t.type || "EXPENSE",
+            category: t.category || "Other"
+        }));
+        setTransactions(processed);
         setSelectedIds(initialTransactions.map((_, i) => i));
     }, [initialTransactions]);
 
@@ -56,7 +86,7 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
         }
     };
 
-    const updateTransaction = (index: number, field: keyof ScannedTransaction, value: string | number) => {
+    const updateTransaction = (index: number, field: keyof ScannedTransaction, value: any) => {
         const updated = [...transactions];
         (updated[index] as any)[field] = value;
         setTransactions(updated);
@@ -80,7 +110,7 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
                     amount: typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount,
                     type: t.type || "EXPENSE",
                     category: t.category || "Other",
-                    date: t.date ? new Date(t.date).toISOString() : new Date().toISOString(),
+                    date: new Date().toISOString(),
                     notes: "Imported via Multi-Scan",
                 }));
 
@@ -113,6 +143,8 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
         []
     );
 
+    const screenWidth = Dimensions.get('window').width;
+
     return (
         <BottomSheetModal
             ref={ref}
@@ -125,7 +157,6 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
             backgroundStyle={{ borderRadius: 32 }}
         >
             <View className="flex-1 bg-white">
-                {/* Header */}
                 <View className="flex-row items-center justify-between px-6 py-4">
                     <TouchableOpacity onPress={() => (ref as any).current?.dismiss()}>
                         <X size={24} color="#6B7280" />
@@ -141,6 +172,9 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
 
                     {transactions.map((item, index) => {
                         const isSelected = selectedIds.includes(index);
+                        const categoryInfo = QUICK_CATEGORIES.find(c => c.name === (item.category || "Other")) || QUICK_CATEGORIES[QUICK_CATEGORIES.length - 1];
+                        const CategoryIcon = categoryInfo.icon;
+
                         return (
                             <View 
                                 key={index} 
@@ -151,12 +185,12 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
                                 }}
                             >
                                 <View className="flex-row items-center justify-between mb-4">
-                                    <TouchableOpacity 
-                                        onPress={() => toggleSelection(index)}
-                                        className={`w-6 h-6 rounded-full items-center justify-center border ${isSelected ? 'bg-[#FF6A00] border-[#FF6A00]' : 'border-gray-300'}`}
-                                    >
-                                        {isSelected && <Check size={14} color="white" strokeWidth={3} />}
-                                    </TouchableOpacity>
+                                        <TouchableOpacity 
+                                            onPress={() => toggleSelection(index)}
+                                            className={`w-6 h-6 rounded-full items-center justify-center border ${isSelected ? 'bg-[#FF6A00] border-[#FF6A00]' : 'border-gray-300'}`}
+                                        >
+                                            {isSelected && <Check size={14} color="white" strokeWidth={3} />}
+                                        </TouchableOpacity>
                                     
                                     <TouchableOpacity onPress={() => removeTransaction(index)}>
                                         <Trash2 size={18} color="#9ca3af" />
@@ -175,6 +209,59 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
                                         />
                                     </View>
 
+                                    {/* Selection Row: Type & Category */}
+                                    <View className="flex-row gap-x-2">
+                                        {/* Type Dropdown Trigger */}
+                                        <View 
+                                            style={{ width: 100 }}
+                                            ref={el => { triggerRefs.current[`type-${index}`] = el; }}
+                                        >
+                                            <TouchableOpacity 
+                                                onPress={() => {
+                                                    triggerRefs.current[`type-${index}`]?.measureInWindow((x, y, w, h) => {
+                                                        setDropdownPosition({ top: y + h + 5, right: screenWidth - (x + w) });
+                                                        setOpenTypeIndex(index);
+                                                    });
+                                                }}
+                                                className="bg-white px-3 py-2 rounded-full border border-gray-100 flex-row items-center justify-between"
+                                            >
+                                                <View className="flex-row items-center gap-x-2">
+                                                    {item.type === "INCOME" ? (
+                                                        <TrendingUp size={13} color="#10b981" />
+                                                    ) : (
+                                                        <TrendingDown size={13} color="#ef4444" />
+                                                    )}
+                                                    <Text className={`text-xs font-geist-sb ${item.type === "INCOME" ? "text-emerald-500" : "text-red-500"}`}>
+                                                        {item.type === "INCOME" ? "Income" : "Expense"}
+                                                    </Text>
+                                                </View>
+                                                <ChevronRight size={12} color="#9ca3af" style={{ transform: [{ rotate: openTypeIndex === index ? '90deg' : '0deg' }] }} />
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        {/* Category Dropdown Trigger */}
+                                        <View 
+                                            style={{ width: 150 }}
+                                            ref={el => { triggerRefs.current[`cat-${index}`] = el; }}
+                                        >
+                                            <TouchableOpacity 
+                                                onPress={() => {
+                                                    triggerRefs.current[`cat-${index}`]?.measureInWindow((x, y, w, h) => {
+                                                        setDropdownPosition({ top: y + h + 5, right: screenWidth - (x + w) });
+                                                        setOpenCategoryIndex(index);
+                                                    });
+                                                }}
+                                                className="bg-white px-3 py-2 rounded-full border border-gray-100 flex-row items-center justify-between"
+                                            >
+                                                <View className="flex-row items-center gap-x-2">
+                                                    <CategoryIcon size={12} color="#FF6A00" />
+                                                    <Text className="text-gray-700 text-xs font-geist-sb" numberOfLines={1}>{item.category || "Select Category"}</Text>
+                                                </View>
+                                                <ChevronRight size={12} color="#9ca3af" style={{ transform: [{ rotate: openCategoryIndex === index ? '90deg' : '0deg' }] }} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+
                                     {/* Amount & Date */}
                                     <View className="flex-row items-center justify-between">
                                         <View className="flex-row items-center bg-white px-3 py-1.5 rounded-full border border-gray-100">
@@ -190,7 +277,7 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
                                         <View className="flex-row items-center bg-white px-3 py-1.5 rounded-full border border-gray-100">
                                             <Calendar size={12} color="#9ca3af" />
                                             <Text className="text-gray-500 font-geist-md text-[11px] ml-1.5">
-                                                {item.date ? new Date(item.date).toLocaleDateString() : "Today"}
+                                                {formatDate()}
                                             </Text>
                                         </View>
                                     </View>
@@ -207,13 +294,79 @@ export const MultiScanPreviewModal = forwardRef<BottomSheetModal, Props>(({ tran
                     <View style={{ height: 40 }} />
                 </BottomSheetScrollView>
 
+                {/* Type Dropdown Modal */}
+                <Modal transparent visible={openTypeIndex !== null} animationType="fade" onRequestClose={() => setOpenTypeIndex(null)}>
+                    <TouchableWithoutFeedback onPress={() => setOpenTypeIndex(null)}>
+                        <View className="flex-1 bg-transparent">
+                            <View 
+                                style={{ position: 'absolute', top: dropdownPosition.top, right: dropdownPosition.right, width: 110 }}
+                                className="bg-white rounded-3xl shadow-xs border border-gray-100 p-1"
+                            >
+                                {[
+                                    { label: "Expense", value: "EXPENSE", color: "text-red-500", icon: <TrendingDown size={14} color="#ef4444" /> },
+                                    { label: "Income", value: "INCOME", color: "text-emerald-500", icon: <TrendingUp size={14} color="#10b981" /> }
+                                ].map((t) => (
+                                    <TouchableOpacity
+                                        key={t.value}
+                                        onPress={() => { 
+                                            if (openTypeIndex !== null) updateTransaction(openTypeIndex, "type", t.value); 
+                                            setOpenTypeIndex(null); 
+                                        }}
+                                        className={`px-3 py-2 rounded-full flex-row items-center ${openTypeIndex !== null && transactions[openTypeIndex]?.type === t.value ? "bg-gray-50" : ""}`}
+                                    >
+                                        <View className="mr-2.5">{t.icon}</View>
+                                        <Text className={`font-geist-sb text-sm ${t.color}`}>
+                                            {t.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+                    </TouchableWithoutFeedback>
+                </Modal>
+
+                {/* Category Dropdown Modal */}
+                <Modal transparent visible={openCategoryIndex !== null} animationType="fade" onRequestClose={() => setOpenCategoryIndex(null)}>
+                    <TouchableWithoutFeedback onPress={() => setOpenCategoryIndex(null)}>
+                        <View className="flex-1 bg-transparent">
+                            <View 
+                                style={{ position: 'absolute', top: dropdownPosition.top, right: dropdownPosition.right, width: 140, maxHeight: 200 }}
+                                className="bg-white rounded-3xl shadow-xs border border-gray-100 p-1 overflow-hidden"
+                            >
+                                <ScrollView showsVerticalScrollIndicator={false}>
+                                    {QUICK_CATEGORIES.map((cat) => (
+                                        <TouchableOpacity
+                                            key={cat.name}
+                                            onPress={() => { 
+                                                if (openCategoryIndex !== null) updateTransaction(openCategoryIndex, "category", cat.name); 
+                                                setOpenCategoryIndex(null); 
+                                            }}
+                                            className={`px-3 py-2 rounded-full flex-row items-center ${openCategoryIndex !== null && transactions[openCategoryIndex]?.category === cat.name ? "bg-orange-50" : ""}`}
+                                        >
+                                            <View 
+                                                className="w-6 h-6 rounded-full items-center justify-center mr-2.5"
+                                                style={{ backgroundColor: (openCategoryIndex !== null && transactions[openCategoryIndex]?.category === cat.name) ? '#FED7AA' : '#F8F9FA' }}
+                                            >
+                                                <cat.icon size={13} color={(openCategoryIndex !== null && transactions[openCategoryIndex]?.category === cat.name) ? "#EA580C" : "#495057"} />
+                                            </View>
+                                            <Text className={`font-geist-sb text-sm ${(openCategoryIndex !== null && transactions[openCategoryIndex]?.category === cat.name) ? "text-[#EA580C]" : "text-gray-700"}`}>
+                                                {cat.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        </View>
+                    </TouchableWithoutFeedback>
+                </Modal>
+
                 {/* Footer */}
                 <View className="p-6 border-t border-gray-100 bg-white">
                     <TouchableOpacity
                         onPress={isExpired ? onUpgrade : handleImport}
                         disabled={isImporting || isExpired || selectedIds.length === 0}
                         className={`w-full py-4 rounded-[100px] items-center justify-center ${isImporting || isExpired || selectedIds.length === 0 ? 'bg-gray-200' : 'bg-[#FF6A00]'}`}
-                        style={{ opacity: isImporting ? 0.7 : 1, backgroundColor: isImporting || isExpired || selectedIds.length === 0 ? '#e5e7eb' : '#FF6A00' }}
+                        style={{ opacity: isImporting ? 0.7 : 1 }}
                     >
                         {isImporting ? (
                             <ActivityIndicator color="white" />

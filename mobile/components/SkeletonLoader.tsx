@@ -3,7 +3,7 @@ import { View, Animated } from 'react-native';
 import { useTheme } from '../providers/theme-provider';
 
 interface SkeletonLoaderProps {
-    type?: 'dashboard' | 'list' | 'analytics' | 'default';
+    type?: 'dashboard' | 'list' | 'analytics' | 'transaction_item' | 'default';
 }
 
 function ShimmerBlock({ width, height, borderRadius, style, flex }: any) {
@@ -108,11 +108,25 @@ export default function SkeletonLoader({ type = 'default' }: SkeletonLoaderProps
         </View>
     );
 
+    const renderTransactionItem = () => (
+        <View className="flex-row items-center py-4 px-4 bg-white dark:bg-slate-900 border-b border-gray-50 dark:border-slate-800">
+            <ShimmerBlock width={44} height={44} borderRadius={22} style={{ marginRight: 16 }} />
+            <View className="flex-1">
+                <ShimmerBlock width="60%" height={16} borderRadius={4} style={{ marginBottom: 8 }} />
+                <ShimmerBlock width="40%" height={12} borderRadius={4} />
+            </View>
+            <View className="items-end">
+                <ShimmerBlock width={60} height={20} borderRadius={4} />
+            </View>
+        </View>
+    );
+
     return (
         <View className="flex-1">
             {type === 'dashboard' && renderDashboard()}
             {type === 'list' && renderList()}
             {type === 'analytics' && renderAnalytics()}
+            {type === 'transaction_item' && renderTransactionItem()}
             {(type === 'default' || !type) && renderList()}
         </View>
     );

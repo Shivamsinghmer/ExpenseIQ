@@ -1,5 +1,7 @@
 import React, { useEffect } from "react";
 import { Stack } from "expo-router";
+import { View } from "react-native";
+
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from "../providers/auth-provider";
@@ -36,7 +38,7 @@ export default function RootLayout() {
     }, [fontsLoaded]);
 
     if (!fontsLoaded) {
-        return null;
+        return <View style={{ flex: 1, backgroundColor: "#FF6A00" }} />;
     }
 
     return (

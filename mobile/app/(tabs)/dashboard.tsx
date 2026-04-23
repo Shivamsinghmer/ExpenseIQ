@@ -148,7 +148,7 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
 import { useSheet } from "../../providers/sheet-provider";
 import * as ImagePicker from 'expo-image-picker';
 import BottomSheet from "@gorhom/bottom-sheet";
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { BudgetSheet } from "../../components/BudgetSheet";
 import { budgetsAPI, usersAPI } from "../../services/api";
 import { useCurrency, SUPPORTED_CURRENCIES } from "../../providers/CurrencyProvider";
@@ -228,6 +228,41 @@ export default function Dashboard() {
             console.error("Sign out error:", error);
         }
     };
+
+    // --- Query Prefetching ---
+    useEffect(() => {
+        const prefetchData = async () => {
+            // Prefetch Transactions (default: Last 6 Months)
+            const now = new Date();
+            const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+            const txnParams = { 
+                page: "1", 
+                limit: "20", 
+                startDate: sixMonthsAgo.toISOString() 
+            };
+            
+            queryClient.prefetchQuery({
+                queryKey: ["transactions", "ALL", "ALL", 1],
+                queryFn: () => transactionsAPI.getAll(txnParams).then(res => res.data),
+            });
+
+            // Prefetch Analytics (default: This Month)
+            const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            queryClient.prefetchQuery({
+                queryKey: ["summary", "thismonth"],
+                queryFn: () => transactionsAPI.getSummary({ startDate: thisMonthStart.toISOString() }).then(res => res.data),
+            });
+            
+            // Prefetch All Transactions for Analytics
+            queryClient.prefetchQuery({
+                queryKey: ["allTxnsForAnalytics", "thismonth"],
+                queryFn: () => transactionsAPI.getAll({ startDate: thisMonthStart.toISOString(), limit: "200" }).then(res => res.data),
+            });
+        };
+
+        const timer = setTimeout(prefetchData, 2000); // Wait 2s after mount to not block initial load
+        return () => clearTimeout(timer);
+    }, [queryClient]);
 
     const [range, setRange] = useState<"1W" | "1M" | "3M" | "1Y" | "All">("1M");
 

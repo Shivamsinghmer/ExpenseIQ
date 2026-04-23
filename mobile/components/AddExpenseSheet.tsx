@@ -75,7 +75,7 @@ interface AddExpenseSheetProps {
     } | null;
 }
 
-const QUICK_CATEGORIES = [
+export const QUICK_CATEGORIES = [
     { name: "Food", icon: Utensils, color: "#FF6B6B" },
     { name: "Coffee", icon: Coffee, color: "#964B00" },
     { name: "Shopping", icon: ShoppingCart, color: "#4DABF7" },

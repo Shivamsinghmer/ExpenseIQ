@@ -5,7 +5,8 @@ import {
     Modal, TouchableWithoutFeedback
 } from "react-native";
 import { useModal } from "../../providers/ModalProvider";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import { useTheme } from "../../providers/theme-provider";
 import { 
     transactionsAPI, paymentsAPI, budgetsAPI,
@@ -24,7 +25,7 @@ import { Swipeable } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
 import BottomSheet from "@gorhom/bottom-sheet";
 import { BudgetSheet } from "../../components/BudgetSheet";
-import SkeletonLoader from "../../components/SkeletonLoader";
+
 import { TransactionItem } from "../../components/TransactionItem";
 import { useCurrency } from "../../providers/CurrencyProvider";
 
@@ -152,10 +153,31 @@ export default function Transactions() {
             return res.data;
         },
     });
+    
+    const PAGE_SIZE = 20;
 
-    const { data, isLoading, refetch, isRefetching } = useQuery<TransactionListResponse>({
-        queryKey: ["transactions", filter, dateRangeFilter, page],
-        queryFn: async () => { const res = await transactionsAPI.getAll(queryParams); return res.data; },
+    const { 
+        data, 
+        isLoading, 
+        fetchNextPage, 
+        hasNextPage, 
+        isFetchingNextPage, 
+        refetch, 
+        isRefetching 
+    } = useInfiniteQuery({
+        queryKey: ["transactions", filter, dateRangeFilter],
+        queryFn: async ({ pageParam }: { pageParam: any }) => { 
+            const page = (pageParam as number) || 1;
+            const res = await transactionsAPI.getAll({ ...queryParams, page: page.toString(), limit: PAGE_SIZE.toString() }); 
+            return res.data; 
+        },
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) => {
+            if (lastPage.pagination.page < lastPage.pagination.totalPages) {
+                return lastPage.pagination.page + 1;
+            }
+            return undefined;
+        }
     });
 
     const { data: budgets } = useQuery({
@@ -198,21 +220,40 @@ export default function Transactions() {
     });
 
     // Local search filtering — no API calls, instant results
+    const allTransactions = useMemo(() => {
+        if (!data?.pages) return [];
+        return data.pages.flatMap(page => page.transactions);
+    }, [data?.pages]);
+
     const filteredTransactions = useMemo(() => {
-        if (!data?.transactions) return [];
-        if (!search.trim()) return data.transactions;
+        if (!allTransactions.length) return [];
+        if (!search.trim()) return allTransactions;
         const q = search.trim().toLowerCase();
-        return data.transactions.filter(tx =>
+        return allTransactions.filter(tx =>
             tx.title.toLowerCase().includes(q) ||
             (tx.category && tx.category.toLowerCase().includes(q)) ||
             (tx.notes && tx.notes.toLowerCase().includes(q))
         );
-    }, [data?.transactions, search]);
+    }, [allTransactions, search]);
 
     const groupedData = useMemo(() => {
         if (!filteredTransactions.length) return null;
         return groupTransactions(filteredTransactions);
     }, [filteredTransactions]);
+
+    // Flatten grouped data for FlatList
+    const flattenedList = useMemo(() => {
+        if (!groupedData) return [];
+        const items: any[] = [];
+        Object.entries(groupedData).forEach(([month, monthInfo]) => {
+            items.push({ type: 'MONTH_HEADER', month, total: monthInfo.total });
+            Object.entries(monthInfo.days).forEach(([day, dayInfo]) => {
+                items.push({ type: 'DAY_HEADER', day, total: dayInfo.total });
+                items.push({ type: 'TRANSACTIONS_CARD', transactions: dayInfo.data });
+            });
+        });
+        return items;
+    }, [groupedData]);
 
     const isExpired = !!(!subscription?.isPro && subscription?.trialEndDate && new Date() > new Date(subscription.trialEndDate));
 
@@ -354,74 +395,98 @@ export default function Transactions() {
             </View>
 
             {/* List Content */}
-            <ScrollView 
+            <FlatList 
                 className="flex-1"
+                data={flattenedList}
+                keyExtractor={(item, index) => item.type + (item.month || item.day || index)}
+                renderItem={({ item }) => {
+                    if (item.type === 'MONTH_HEADER') {
+                        return (
+                            <View className="flex-row items-center justify-between px-6 mb-3 mt-4">
+                                <Text className="text-gray-400 font-geist-b text-[13px] tracking-widest">{item.month}</Text>
+                                <Text className="text-gray-400 font-geist-b text-[13px] mr-1">
+                                    {currency.symbol}{Math.abs(item.total).toLocaleString("en-IN")}
+                                </Text>
+                            </View>
+                        );
+                    }
+                    if (item.type === 'DAY_HEADER') {
+                        return (
+                            <View className="flex-row items-center justify-between px-6 mb-2 mt-4">
+                                <Text className="text-gray-400 font-geist-md text-[13px]">{item.day}</Text>
+                                <Text className="text-gray-400 font-geist-md text-[13px]">
+                                    {currency.symbol}{Math.abs(item.total).toLocaleString("en-IN")}
+                                </Text>
+                            </View>
+                        );
+                    }
+                    if (item.type === 'TRANSACTIONS_CARD') {
+                        return (
+                            <View className="mx-5 bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-sm border border-gray-50 dark:border-slate-800">
+                                {item.transactions.map((tx: Transaction) => (
+                                    <TransactionItem 
+                                        key={tx.id} 
+                                        item={tx} 
+                                        remainingBudget={getRemainingBudget(tx.category)}
+                                        onDelete={(id) => {
+                                            if (isExpired) {
+                                                showModal("Trial Expired", "Upgrade to Pro to delete transactions.");
+                                                return;
+                                            }
+                                            showModal("Delete Transaction", `Are you sure you want to delete "${tx.title}"?`, [
+                                                { text: "Cancel", onPress: hideModal, style: "cancel" },
+                                                { text: "Delete", style: "destructive", onPress: () => {
+                                                    hideModal();
+                                                    deleteMutation.mutate(id);
+                                                }},
+                                            ]);
+                                        }}
+                                        isExpired={isExpired}
+                                        showSwipe={true}
+                                    />
+                                ))}
+                            </View>
+                        );
+                    }
+                    return null;
+                }}
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6A00" />}
-            >
-                {groupedData && Object.entries(groupedData).map(([month, monthInfo]) => (
-                    <View key={month} className="mb-6">
-                            {/* Month Header */}
-                            <View className="flex-row items-center justify-between px-6 mb-3">
-                                <Text className="text-gray-400 font-geist-b text-[13px] tracking-widest">{month}</Text>
-                                <View className="flex-row items-center">
-                                    <Text className="text-gray-400 font-geist-b text-[13px] mr-1">
-                                        {currency.symbol}{Math.abs(monthInfo.total).toLocaleString("en-IN")}
-                                    </Text>
-                                </View>
+                onEndReached={() => {
+                    if (hasNextPage && !isFetchingNextPage) {
+                        fetchNextPage();
+                    }
+                }}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={() => (
+                    <View className="bg-transparent mt-2">
+                        {isFetchingNextPage ? (
+                            <View className="mx-5 bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-sm border border-gray-50 dark:border-slate-800">
+                                {[1, 2, 3].map((i) => (
+                                    <SkeletonLoader key={i} type="transaction_item" />
+                                ))}
                             </View>
-
-                            {/* Days content */}
-                            {Object.entries(monthInfo.days).map(([day, dayInfo]) => (
-                                <View key={day} className="mb-4">
-                                    {/* Day Header */}
-                                    <View className="flex-row items-center justify-between px-6 mb-2">
-                                        <Text className="text-gray-400 font-geist-md text-[13px]">{day}</Text>
-                                        <Text className="text-gray-400 font-geist-md text-[13px]">
-                                            {currency.symbol}{Math.abs(dayInfo.total).toLocaleString("en-IN")}
-                                        </Text>
-                                    </View>
-
-                                    {/* Transaction Cards Wrapper */}
-                                    <View className="mx-5 bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-sm border border-gray-50 dark:border-slate-800">
-                                        {dayInfo.data.map((tx) => (
-                                            <TransactionItem 
-                                                key={tx.id} 
-                                                item={tx} 
-                                                remainingBudget={getRemainingBudget(tx.category)}
-                                                onDelete={(id) => {
-                                                    if (isExpired) {
-                                                        showModal("Trial Expired", "Upgrade to Pro to delete transactions.");
-                                                        return;
-                                                    }
-                                                    showModal("Delete Transaction", `Are you sure you want to delete "${tx.title}"?`, [
-                                                        { text: "Cancel", onPress: hideModal, style: "cancel" },
-                                                        { text: "Delete", style: "destructive", onPress: () => {
-                                                            hideModal();
-                                                            deleteMutation.mutate(id);
-                                                        }},
-                                                    ]);
-                                                }}
-                                                isExpired={isExpired}
-                                                showSwipe={true}
-                                            />
-                                        ))}
-                                    </View>
-                                </View>
-                            ))}
-                        </View>
-                    ))}
-
-                    {(!filteredTransactions || filteredTransactions.length === 0) && (
-                        <View className="items-center justify-center py-20 opacity-50">
-                            <BadgeDollarSignIcon size={32} color="#9ca3af" />
-                            <Text className="text-gray-400 text-base font-geist-md mt-4 text-center px-10">
-                                {search.trim() ? `No results for "${search.trim()}"` : "No transactions found for the selected period"}
-                            </Text>
-                        </View>
-                    )}
-                    <View style={{ height: 100 }} />
-                </ScrollView>
+                        ) : hasNextPage ? (
+                            <View className="py-4 items-center">
+                                <Text className="text-gray-300 font-geist-md text-xs">Reach bottom to load more</Text>
+                            </View>
+                        ) : flattenedList.length > 0 ? (
+                            <View className="py-2 items-center">
+                                <Text className="text-gray-400 font-geist-md text-xs opacity-80">No more transactions</Text>
+                            </View>
+                        ) : null}
+                        <View style={{ height: 100 }} />
+                    </View>
+                )}
+                ListEmptyComponent={() => (
+                    <View className="items-center justify-center py-20 opacity-50">
+                        <BadgeDollarSignIcon size={32} color="#9ca3af" />
+                        <Text className="text-gray-400 text-base font-geist-md mt-4 text-center px-10">
+                            {search.trim() ? `No results for "${search.trim()}"` : "No transactions found for the selected period"}
+                        </Text>
+                    </View>
+                )}
+            />
 
             <BudgetSheet 
                 ref={budgetSheetRef} 
