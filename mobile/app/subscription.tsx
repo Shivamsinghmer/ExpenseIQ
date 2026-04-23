@@ -27,20 +27,20 @@ import { useCurrency } from "../providers/CurrencyProvider";
 
 const PLAN_PRICES: any = {
     monthly: {
-        INR: 100,
-        USD: 1.49,
-        EUR: 1.39,
-        GBP: 1.19,
-        JPY: 200,
-        AED: 5.99
+        INR: 150,
+        USD: 2.29,
+        EUR: 2.09,
+        GBP: 1.79,
+        JPY: 300,
+        AED: 8.99
     },
     annual: {
-        INR: 1020,
-        USD: 14.99,
-        EUR: 13.99,
-        GBP: 11.99,
-        JPY: 2000,
-        AED: 54.99
+        INR: 1530,
+        USD: 22.49,
+        EUR: 20.99,
+        GBP: 17.99,
+        JPY: 3000,
+        AED: 82.49
     }
 };
 
@@ -135,7 +135,7 @@ export default function SubscriptionScreen() {
         try {
             setLoading(true);
             const currencyCode = currency.code as keyof typeof PLAN_PRICES.monthly;
-            const amount = PLAN_PRICES[selectedPlan][currencyCode] || (selectedPlan === 'monthly' ? 100 : 1020);
+            const amount = PLAN_PRICES[selectedPlan][currencyCode] || (selectedPlan === 'monthly' ? 150 : 1530);
             const response = await paymentsAPI.createOrder(amount);
             const { payment_session_id, order_id, environment } = response.data;
             const cfEnv = environment === "PRODUCTION" ? CFEnvironment.PRODUCTION : CFEnvironment.SANDBOX;
@@ -275,8 +275,8 @@ export default function SubscriptionScreen() {
                                                 className="bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl border border-gray-100 dark:border-slate-800 p-1 z-[999]"
                                             >
                                                 {[
-                                                    { label: "Monthly Billing", value: "monthly", sub: `${currency.symbol}${PLAN_PRICES.monthly[currency.code] || 100} / month` },
-                                                    { label: "Annual Billing", value: "annual", sub: `${currency.symbol}${PLAN_PRICES.annual[currency.code] || 1020} / year • Save 15%`, highlight: true }
+                                                    { label: "Monthly Billing", value: "monthly", sub: `${currency.symbol}${PLAN_PRICES.monthly[currency.code] || 150} / month` },
+                                                    { label: "Annual Billing", value: "annual", sub: `${currency.symbol}${PLAN_PRICES.annual[currency.code] || 1530} / year • Save 15%`, highlight: true }
                                                 ].map((p) => (
                                                     <TouchableOpacity
                                                         key={p.value}
@@ -305,7 +305,7 @@ export default function SubscriptionScreen() {
                         <View className="items-center mb-8">
                             <View className="flex-row items-baseline">
                                 <Text className="text-gray-900 text-6xl font-geist-b">
-                                    {currency.symbol}{PLAN_PRICES[selectedPlan][currency.code] || (selectedPlan === 'monthly' ? '100' : '1020')}
+                                    {currency.symbol}{PLAN_PRICES[selectedPlan][currency.code] || (selectedPlan === 'monthly' ? '150' : '1530')}
                                 </Text>
                                 <Text className="text-gray-500 ml-2 text-lg font-geist-md">
                                     {selectedPlan === 'monthly' ? '/ month' : '/ year'}
