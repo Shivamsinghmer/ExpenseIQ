@@ -5,9 +5,9 @@ import {
     TextInput,
     TouchableOpacity,
     ActivityIndicator,
-    Alert,
     Platform,
 } from "react-native";
+import { useModal } from "../../providers/ModalProvider";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "../../providers/theme-provider";
@@ -24,6 +24,7 @@ import { TrendingDown, TrendingUp, CalendarDays, FileText, StickyNote, Check, Ch
 import { useRouter } from "expo-router";
 
 export default function AddTransaction() {
+    const { showModal, hideModal } = useModal();
     const queryClient = useQueryClient();
     const router = useRouter();
     const { isDark } = useTheme();
@@ -59,20 +60,23 @@ export default function AddTransaction() {
             queryClient.invalidateQueries({ queryKey: ["transactions"] });
             queryClient.invalidateQueries({ queryKey: ["summary"] });
             resetForm();
-            Alert.alert("Success", "Transaction added successfully!");
+            showModal("Success", "Transaction added successfully!");
         },
         onError: (error: any) => {
             if (error.response?.status === 403 && error.response?.data?.message?.includes("Trial expired")) {
-                Alert.alert(
+                showModal(
                     "Trial Expired",
                     "Your free trial has ended. Upgrade to Pro to continue using all features.",
                     [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Upgrade", onPress: () => router.push("/subscription") }
+                        { text: "Cancel", style: "cancel", onPress: hideModal },
+                        { text: "Upgrade", onPress: () => {
+                            hideModal();
+                            router.push("/subscription");
+                        }}
                     ]
                 );
             } else {
-                Alert.alert("Error", error.response?.data?.error || "Failed to add transaction");
+                showModal("Sorry", error.response?.data?.error || "Failed to add transaction");
             }
         },
     });
@@ -86,8 +90,8 @@ export default function AddTransaction() {
     };
 
     const handleSubmit = () => {
-        if (!title.trim()) { Alert.alert("Error", "Please enter a title"); return; }
-        if (!amount || parseFloat(amount) <= 0) { Alert.alert("Error", "Please enter a valid amount"); return; }
+        if (!title.trim()) { showModal("Error", "Please enter a title"); return; }
+        if (!amount || parseFloat(amount) <= 0) { showModal("Error", "Please enter a valid amount"); return; }
         createMutation.mutate({
             title: title.trim(),
             amount: parseFloat(amount),

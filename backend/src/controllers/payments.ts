@@ -135,7 +135,7 @@ export async function createOrder(req: AuthenticatedRequest, res: Response): Pro
         const orderId = `order_${Date.now()}_${user.id.substring(0, 8)}`;
 
         // Use a clearer placeholder or construct one from user ID
-        const customerEmail = `user_${user.id}@expenseiq.app`;
+        const customerEmail = `user_${user.id}@ExpensePal.app`;
 
         const request = {
             order_amount: amount,

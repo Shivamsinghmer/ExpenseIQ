@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useMemo, useState, useEffect } from "react";
+import React, { forwardRef, useCallback, useMemo, useState, useEffect, useRef } from "react";
 import {
     View,
     Text,
@@ -8,37 +8,74 @@ import {
     Alert,
     ScrollView,
     Switch,
+    Image,
+    Modal,
+    TouchableWithoutFeedback,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform
 } from "react-native";
 import BottomSheet, { 
     BottomSheetBackdrop, 
-    BottomSheetScrollView, 
+    BottomSheetScrollView,
+    BottomSheetModal,
+    BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import {
     transactionsAPI,
-    tagsAPI,
     paymentsAPI,
-    type Tag,
+    budgetsAPI,
+    envelopesAPI,
+    scanAPI,
     type CreateTransactionData,
+    type ScannedTransaction,
 } from "../services/api";
+import { MultiScanPreviewModal } from "./MultiScanPreviewModal";
 import {
     X, Check, Camera, Image as ImageIcon, MessageSquare,
     ChevronRight, CalendarDays, MapPin, Users,
     Utensils, ShoppingBag, Car, HeartPulse, Home as HomeIcon,
     Gamepad2, Zap, Wallet, MoreHorizontal, Plane,
-    GraduationCap, Gift, TrendingUp, ShoppingCart, Coffee
+    GraduationCap, Gift, TrendingUp, TrendingDown, ShoppingCart, Coffee,
+    Plus,
+    Goal
 } from "lucide-react-native";
+
+import { StreakCelebration } from "./StreakCelebration";
+import { useCurrency } from "../providers/CurrencyProvider";
+import { useModal } from "../providers/ModalProvider";
+
+const AVATARS = [
+    require('../assets/friend.png'),
+    require('../assets/friend2.png'),
+    require('../assets/friend3.png'),
+    require('../assets/friend4.png'),
+    require('../assets/friend5.png'),
+    require('../assets/friend6.png'),
+    require('../assets/friend7.png'),
+    require('../assets/friend8.png'),
+    require('../assets/friend9.png'),
+    require('../assets/friend10.png'),
+];
 
 interface AddExpenseSheetProps {
     onClose: () => void;
     onSMSPress: () => void;
     onUpgrade: () => void;
     smsData?: string;
+    initialData?: {
+        image?: string;
+        base64?: string;
+        title?: string;
+        amount?: string;
+        type?: "INCOME" | "EXPENSE";
+    } | null;
 }
 
-const QUICK_CATEGORIES = [
+export const QUICK_CATEGORIES = [
     { name: "Food", icon: Utensils, color: "#FF6B6B" },
     { name: "Coffee", icon: Coffee, color: "#964B00" },
     { name: "Shopping", icon: ShoppingCart, color: "#4DABF7" },
@@ -55,9 +92,10 @@ const QUICK_CATEGORIES = [
     { name: "Other", icon: MoreHorizontal, color: "#ADB5BD" },
 ];
 
-const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
-    ({ onClose, onSMSPress, onUpgrade, smsData }, ref) => {
+const AddExpenseSheet = forwardRef<BottomSheetModal, AddExpenseSheetProps>(
+    ({ onClose, onSMSPress, onUpgrade, smsData, initialData }, ref) => {
         const queryClient = useQueryClient();
+        const { currency } = useCurrency();
         const snapPoints = useMemo(() => ["92%"], []);
 
         // Form state
@@ -65,19 +103,72 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         const [amount, setAmount] = useState("");
         const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
         const [notes, setNotes] = useState("");
-        const [selectedTags, setSelectedTags] = useState<string[]>([]);
         const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+        const [selectedEnvelopeId, setSelectedEnvelopeId] = useState<string | null>(null);
+        const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+        const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+        const typeTriggerRef = useRef<View>(null);
         const [location, setLocation] = useState<string | null>(null);
         const [isSplit, setIsSplit] = useState(false);
         const [date] = useState(new Date());
+        const { showModal, hideModal } = useModal();
 
-        const { data: tags } = useQuery<Tag[]>({
-            queryKey: ["tags"],
-            queryFn: async () => {
-                const res = await tagsAPI.getAll();
-                return res.data;
-            },
-        });
+        const [isScanning, setIsScanning] = useState(false);
+        const [scannedImage, setScannedImage] = useState<string | null>(null);
+        const [multiScanTransactions, setMultiScanTransactions] = useState<ScannedTransaction[]>([]);
+        const multiScanSheetRef = useRef<BottomSheetModal>(null);
+
+        const [reachedMilestone, setReachedMilestone] = useState<any | null>(null);
+        const [currentStreakAfterTransaction, setCurrentStreakAfterTransaction] = useState<number>(0);
+
+        // Split state
+        const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+        const [friends, setFriends] = useState<{ id: string; name: string; avatar: any }[]>([]);
+        const [splitType, setSplitType] = useState<"EQUALLY" | "MANUAL">("EQUALLY");
+        const [manualAmounts, setManualAmounts] = useState<Record<string, string>>({});
+        const [showSplitDropdown, setShowSplitDropdown] = useState(false);
+        const [newFriendName, setNewFriendName] = useState("");
+        const splitTriggerRef = useRef<View>(null);
+        const [addFriendModalVisible, setAddFriendModalVisible] = useState(false);
+
+        // Effect to handle initialData when opening
+        useEffect(() => {
+            if (initialData) {
+                if (initialData.image) setScannedImage(initialData.image);
+                if (initialData.base64) {
+                    processScannedImage(initialData.base64);
+                }
+                if (initialData.title) {
+                    const formattedTitle = initialData.type === "INCOME" 
+                        ? `Received from ${initialData.title}` 
+                        : `Paid to ${initialData.title}`;
+                    setQuickAddText(formattedTitle);
+                    // Attempt to auto-categorize from original title
+                    const matched = QUICK_CATEGORIES.find(c => 
+                        initialData.title?.toLowerCase().includes(c.name.toLowerCase())
+                    );
+                    if (matched) setSelectedCategory(matched.name);
+                }
+                if (initialData.amount) setAmount(initialData.amount);
+                if (initialData.type) setType(initialData.type);
+            } else {
+                setScannedImage(null);
+            }
+        }, [initialData]);
+
+        // Auto-categorization as user types
+        const handleQuickAddChange = (text: string) => {
+            setQuickAddText(text);
+            if (!text) return;
+
+            const matched = QUICK_CATEGORIES.find(c => 
+                text.toLowerCase().includes(c.name.toLowerCase())
+            );
+            if (matched && !selectedCategory) {
+                setSelectedCategory(matched.name);
+            }
+        };
+
 
         const { data: subscription } = useQuery({
             queryKey: ["subscriptionStatus"],
@@ -87,25 +178,74 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             },
         });
 
+        const { data: budgetsData } = useQuery({
+            queryKey: ["budgets"],
+            queryFn: async () => {
+                const res = await budgetsAPI.getAll();
+                return res.data;
+            }
+        });
+
+        const { data: envelopesData } = useQuery({
+            queryKey: ["envelopes"],
+            queryFn: async () => {
+                const res = await envelopesAPI.getAll();
+                return res.data;
+            }
+        });
+
+        const activeEnvelopes = useMemo(() => {
+            if (!envelopesData) return [];
+            const now = new Date();
+            now.setHours(0,0,0,0);
+            return envelopesData.filter(e => new Date(e.endDate) >= now);
+        }, [envelopesData]);
+
+        const totalBudget = useMemo(() => {
+            return budgetsData?.reduce((acc: number, curr: any) => acc + curr.amount, 0) || 0;
+        }, [budgetsData]);
+
         const isExpired = !subscription?.isPro && subscription?.trialEndDate && new Date() > new Date(subscription.trialEndDate);
 
         const createMutation = useMutation({
             mutationFn: (data: CreateTransactionData) => transactionsAPI.create(data),
-            onSuccess: () => {
+            onSuccess: (res, variables) => {
+                const responseData = res.data;
+                const newMilestone = responseData?.newMilestone;
+
+                // If linked to envelope, manually update its spent amount
+                if (selectedEnvelopeId && variables.amount && variables.type === "EXPENSE") {
+                    const env = activeEnvelopes.find(e => e.id === selectedEnvelopeId);
+                    if (env) {
+                        envelopesAPI.update(env.id, { spent: env.spent + variables.amount })
+                            .then(() => queryClient.invalidateQueries({ queryKey: ["envelopes"] }))
+                            .catch(e => console.error("Failed to sync envelope", e));
+                    }
+                }
+
                 queryClient.invalidateQueries({ queryKey: ["transactions"] });
                 queryClient.invalidateQueries({ queryKey: ["summary"] });
+                queryClient.invalidateQueries({ queryKey: ["streak"] });
+                
                 resetForm();
-                Alert.alert("Success", "Transaction added!");
-                onClose();
+
+                if (newMilestone) {
+                    setCurrentStreakAfterTransaction(newMilestone.days);
+                    setReachedMilestone(newMilestone);
+                    // We don't call onClose() yet, let the celebration handle it
+                } else {
+                    showModal("Success", "Transaction added!");
+                    onClose();
+                }
             },
             onError: (error: any) => {
                 if (error.response?.status === 403) {
-                    Alert.alert("Trial Expired", "Upgrade to Pro to continue.", [
-                        { text: "Cancel", style: "cancel" },
+                    showModal("Trial Expired", "Upgrade to Pro to continue.", [
+                        { text: "Cancel", onPress: () => {}, style: "cancel" },
                         { text: "Upgrade", onPress: onUpgrade },
                     ]);
                 } else {
-                    Alert.alert("Error", error.response?.data?.error || "Failed to add transaction");
+                    showModal("Error", error.response?.data?.error || "Failed to add transaction");
                 }
             },
         });
@@ -114,93 +254,206 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
             setQuickAddText("");
             setAmount("");
             setNotes("");
-            setSelectedTags([]);
             setSelectedCategory(null);
+            setSelectedEnvelopeId(null);
             setLocation(null);
             setIsSplit(false);
+            setSelectedFriends([]);
+            setFriends([]);
+            setSplitType("EQUALLY");
+            setManualAmounts({});
         };
 
         const handleSubmit = () => {
+            if (totalBudget === 0) {
+                showModal(
+                    "Budget Required",
+                    "Please set your monthly budget directly from the Home Dashboard or Transactions panel before adding expenses.",
+                    [{ text: "OK", onPress: () => {}, style: "default" }]
+                );
+                return;
+            }
+
             const title = quickAddText.trim() || notes.trim() || selectedCategory || "Untitled Transaction";
-            if (!amount || parseFloat(amount) <= 0) { Alert.alert("Error", "Please enter a valid amount"); return; }
-            createMutation.mutate({
+            
+            // Sanitize amount: remove currency symbols, commas, etc.
+            const cleanAmount = (amount || "").replace(/[^0-9.]/g, "");
+            const parsedAmount = parseFloat(cleanAmount);
+
+            if (!parsedAmount || parsedAmount <= 0) { 
+                showModal("Error", "Please enter a valid amount"); 
+                return; 
+            }
+
+            const mutationData: any = {
                 title,
-                amount: parseFloat(amount),
+                amount: parsedAmount,
                 type,
+                category: selectedCategory || "Other",
                 notes: notes.trim() || (location ? `At ${location}` : undefined),
                 date: date.toISOString(),
-                tagIds: selectedTags.length > 0 ? selectedTags : undefined,
-            });
+            };
+
+            // If split is active, append split info to notes
+            if (isSplit && selectedFriends.length > 0) {
+                const total = parsedAmount;
+                const splitInfo = selectedFriends.map(id => {
+                    const friend = friends.find(f => f.id === id);
+                    const amountStr = splitType === "EQUALLY" 
+                        ? (total / (selectedFriends.length + 1)).toFixed(2)
+                        : manualAmounts[id] || "0";
+                    return `${friend?.name}: ${currency.symbol}${amountStr}`;
+                }).join(", ");
+                
+                mutationData.notes = (mutationData.notes ? `${mutationData.notes} | ` : "") + `Split: ${splitInfo}`;
+            }
+
+            // Append envelope info if linked
+            if (selectedEnvelopeId) {
+                const env = activeEnvelopes.find(e => e.id === selectedEnvelopeId);
+                if (env) {
+                    mutationData.notes = (mutationData.notes ? `${mutationData.notes} | ` : "") + `Env:${env.id}|EnvTitle:${env.title}|EnvIcon:${env.icon || '🎯'}`;
+                }
+            }
+
+            createMutation.mutate(mutationData);
+        };
+
+        const handleSheetChange = useCallback((index: number) => {
+            if (index === -1) {
+                onClose();
+                resetForm();
+            }
+        }, [onClose]);
+
+        const processScannedImage = async (base64: string) => {
+            try {
+                setIsScanning(true);
+                const res = await scanAPI.scanReceipt(base64);
+                const { documentType, transactions } = res.data;
+
+                if (!transactions || transactions.length === 0) {
+                    showModal("Scan Result", "No transactions detected in the image.");
+                    return;
+                }
+
+                if (documentType === "STATEMENT" || transactions.length > 1) {
+                    // Show multi-selection bottom sheet
+                    setMultiScanTransactions(transactions);
+                    multiScanSheetRef.current?.present();
+                } else {
+                    // Auto-fill form for single receipt
+                    const data = transactions[0];
+                    if (data.amount) setAmount(data.amount.toString());
+                    if (data.merchant) {
+                        const formatted = data.type === "INCOME" ? `Received from ${data.merchant}` : `Paid to ${data.merchant}`;
+                        setQuickAddText(formatted);
+                        
+                        // Auto-categorize
+                        const matched = QUICK_CATEGORIES.find(c => 
+                            data.merchant.toLowerCase().includes(c.name.toLowerCase())
+                        );
+                        if (matched) setSelectedCategory(matched.name);
+                    }
+                    if (data.type) setType(data.type);
+                }
+            } catch (error: any) {
+                console.error("Scanning Error:", error);
+                showModal("Scan Failed", "We couldn't read the details from this image. Please enter manually.");
+            } finally {
+                setIsScanning(false);
+            }
         };
 
         const handleCamera = async () => {
             const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
             if (permissionResult.granted === false) {
-                Alert.alert("Permission Required", "Camera access is needed to scan receipts.");
+                showModal("Permission Required", "Camera access is needed to scan receipts.");
                 return;
             }
             const result = await ImagePicker.launchCameraAsync({
                 allowsEditing: true,
-                quality: 1,
+                quality: 0.7,
+                base64: true,
             });
-            if (!result.canceled) {
-                Alert.alert("Scan Started", "Processing receipt image...");
+            if (!result.canceled && result.assets[0].base64) {
+                setScannedImage(result.assets[0].uri);
+                processScannedImage(result.assets[0].base64);
             }
         };
 
         const handlePhotos = async () => {
             const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (permissionResult.granted === false) {
-                Alert.alert("Permission Required", "Photo library access is needed.");
+                showModal("Permission Required", "Photo library access is needed.");
                 return;
             }
             const result = await ImagePicker.launchImageLibraryAsync({
                 allowsEditing: true,
-                quality: 1,
+                quality: 0.7,
+                base64: true,
             });
-            if (!result.canceled) {
-                Alert.alert("Image Selected", "Processing receipt...");
+            if (!result.canceled && result.assets[0].base64) {
+                setScannedImage(result.assets[0].uri);
+                processScannedImage(result.assets[0].base64);
             }
         };
 
-        const handleImport = () => {
-            Alert.alert("Import Statement", "Select a PDF or CSV bank statement to process.", [
-                { text: "Cancel", style: "cancel" },
-                { text: "Select File", onPress: () => Alert.alert("Select", "File picker coming soon!") }
-            ]);
-        };
+
+
+        const [isLocating, setIsLocating] = useState(false);
 
         const handleLocation = async () => {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Permission to access location was denied');
-                return;
-            }
+            try {
+                setIsLocating(true);
+                let { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    showModal('Permission Denied', 'Permission to access location was denied');
+                    return;
+                }
 
-            let loc = await Location.getCurrentPositionAsync({});
-            let reverse = await Location.reverseGeocodeAsync({
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude
-            });
+                // Get current position
+                let loc = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                });
 
-            if (reverse.length > 0) {
-                const addr = reverse[0];
-                const parts = [
-                    addr.name,
-                    addr.street,
-                    addr.district,
-                    addr.city
-                ].filter(Boolean);
-                const displayAddr = parts.slice(0, 2).join(", ") || "Unknown Location";
-                setLocation(displayAddr);
+                try {
+                    let reverse = await Location.reverseGeocodeAsync({
+                        latitude: loc.coords.latitude,
+                        longitude: loc.coords.longitude
+                    });
+
+                    if (reverse && reverse.length > 0) {
+                        const addr = reverse[0];
+                        const allParts = [
+                            addr.name,
+                            addr.street,
+                            addr.district,
+                            addr.city,
+                            addr.subregion,
+                            addr.region
+                        ].filter(Boolean);
+                        
+                        const uniqueParts = Array.from(new Set(allParts));
+                        
+                        if (uniqueParts.length > 0) {
+                            setLocation(uniqueParts.slice(0, 2).join(", "));
+                        } else {
+                            setLocation("Unknown Address");
+                        }
+                    } else {
+                        setLocation("Unknown Address");
+                    }
+                } catch (geoError) {
+                    setLocation("Unknown Address");
+                }
+            } catch (error) {
+                showModal('Sorry!', 'Failed to get your location. Try again!', [{ text: 'Okay', onPress: () => {} }]);
+            } finally {
+                setIsLocating(false);
             }
         };
 
-        const toggleTag = (tagId: string) => {
-            setSelectedTags((prev) =>
-                prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
-            );
-        };
 
         const renderBackdrop = useCallback(
             (props: any) => (
@@ -218,18 +471,22 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
         const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
 
         return (
-            <BottomSheet
+            <>
+            <BottomSheetModal
                 ref={ref}
-                index={-1}
                 snapPoints={snapPoints}
                 enablePanDownToClose
                 backdropComponent={renderBackdrop}
-                onClose={onClose}
-                handleIndicatorStyle={{ backgroundColor: "#d1d5db", width: 40 }}
+                onChange={handleSheetChange}
+                keyboardBehavior="fillParent"
+                android_keyboardInputMode="adjustResize"
                 backgroundStyle={{ backgroundColor: "#F5F5F5", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
             >
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-5 pb-4">
+                    <TouchableOpacity onPress={() => { (ref as any)?.current?.dismiss(); onClose(); }}>
+                        <X size={22} color="#6B7280" />
+                    </TouchableOpacity>
                     <Text className="text-gray-900 text-lg font-geist-b">Add Expense</Text>
                     <TouchableOpacity
                         onPress={handleSubmit}
@@ -257,9 +514,40 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                 placeholder="e.g. Starbucks coffee"
                                 placeholderTextColor="#9ca3af"
                                 value={quickAddText}
-                                onChangeText={setQuickAddText}
+                                onChangeText={handleQuickAddChange}
                             />
                         </View>
+                        
+                        {/* Scanned Image Preview */}
+                        {scannedImage && (
+                            <View className="mt-4 rounded-xl overflow-hidden border border-gray-100 h-32 bg-gray-50 flex-row">
+                                <Image 
+                                    source={{ uri: scannedImage }} 
+                                    style={{ width: 100, height: '100%' }}
+                                    resizeMode="cover"
+                                />
+                                <View className="flex-1 p-3 justify-center">
+                                    <View className="flex-row items-center mb-1">
+                                        <Check size={14} color="#22c55e" />
+                                        <Text className="text-gray-700 text-[10px] font-geist-sb ml-1 uppercase">
+                                            {isScanning ? "Scanning..." : "Receipt Scanned"}
+                                        </Text>
+                                    </View>
+                                    <Text className="text-gray-400 text-[10px] font-geist-md">
+                                        {isScanning ? "AI is analyzing your document..." : "Details extracted successfully"}
+                                    </Text>
+                                    {!isScanning && (
+                                        <TouchableOpacity 
+                                            onPress={() => setScannedImage(null)}
+                                            className="mt-2"
+                                        >
+                                            <Text className="text-red-500 text-[11px] font-geist-sb">Remove Photo</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            </View>
+                        )}
+
                         <Text className="text-gray-400 text-xs font-geist-md text-center mt-4">or scan / import</Text>
                         <View className="flex-row gap-2 mt-4">
                             <TouchableOpacity onPress={handleCamera} className="flex-1 flex-row items-center justify-center bg-gray-50 rounded-xl py-3 border border-gray-100">
@@ -279,11 +567,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                             </TouchableOpacity>
                         </View>
 
-                        {/* Import Statement */}
-                        <TouchableOpacity onPress={handleImport} className="flex-row items-center mt-3 bg-orange-50 rounded-xl py-3 px-4">
-                            <Text className="text-[#FF6A00] text-sm font-geist-sb flex-1">📄 Import Statement</Text>
-                            <ChevronRight size={16} color="#FF6A00" />
-                        </TouchableOpacity>
+
                     </View>
 
                     {/* Date & Time / Location */}
@@ -295,6 +579,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                         </View>
                         <TouchableOpacity 
                             onPress={handleLocation}
+                            disabled={isLocating}
                             className={`flex-1 bg-white rounded-2xl p-4 border border-gray-100 shadow-sm`}
                         >
                             <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-2">Location</Text>
@@ -311,7 +596,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                     <View className="mx-5 bg-white rounded-2xl p-5 mb-4 border border-gray-100 shadow-sm">
                         <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-3">Amount</Text>
                         <View className="flex-row items-center">
-                            <Text className="text-[#FF6A00] text-3xl font-geist-b mr-1">₹</Text>
+                            <Text className="text-[#FF6A00] text-3xl font-geist-b mr-1">{currency.symbol}</Text>
                             <TextInput
                                 className="flex-1 text-gray-900 text-3xl font-geist-b"
                                 placeholder="0"
@@ -322,22 +607,118 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                             />
                         </View>
 
-                        {/* Type Toggle */}
-                        <View className="flex-row bg-gray-100 p-1 rounded-xl mt-4">
-                            <TouchableOpacity
-                                onPress={() => setType("EXPENSE")}
-                                className={`flex-1 py-2.5 rounded-lg items-center ${type === "EXPENSE" ? "bg-white shadow-sm" : ""}`}
-                            >
-                                <Text className={`text-sm font-geist-sb ${type === "EXPENSE" ? "text-red-500" : "text-gray-400"}`}>Expense</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => setType("INCOME")}
-                                className={`flex-1 py-2.5 rounded-lg items-center ${type === "INCOME" ? "bg-white shadow-sm" : ""}`}
-                            >
-                                <Text className={`text-sm font-geist-sb ${type === "INCOME" ? "text-emerald-500" : "text-gray-400"}`}>Income</Text>
-                            </TouchableOpacity>
+                        {/* Type Selector - New Dropdown Style */}
+                        <View className="flex-row items-center justify-between pt-4 mt-2 border-t border-gray-100">
+                            <Text className="text-gray-500 text-base font-geist-md">Amount type</Text>
+                            <View ref={typeTriggerRef}>
+                                <TouchableOpacity 
+                                    onPress={() => {
+                                        typeTriggerRef.current?.measureInWindow((x, y, width, height) => {
+                                            setDropdownPosition({ top: y + height + 5, right: Dimensions.get('window').width - (x + width) });
+                                            setShowTypeDropdown(true);
+                                        });
+                                    }}
+                                    activeOpacity={0.8}
+                                    className="bg-gray-50 px-6 py-2 rounded-full border border-gray-100 flex-row items-center min-w-[110px] justify-between"
+                                >
+                                    <View className="flex-row items-center">
+                                        {type === "EXPENSE" ? (
+                                            <TrendingDown size={14} color="#ef4444" style={{ marginRight: 6 }} />
+                                        ) : (
+                                            <TrendingUp size={14} color="#10b981" style={{ marginRight: 6 }} />
+                                        )}
+                                        <Text className={`font-geist-sb text-base ${type === "EXPENSE" ? "text-red-500" : "text-emerald-500"}`}>
+                                            {type === "EXPENSE" ? "Expense" : "Income"}
+                                        </Text>
+                                    </View>
+                                    <ChevronRight size={14} color="#9ca3af" style={{ transform: [{ rotate: showTypeDropdown ? '90deg' : '0deg' }], marginLeft: 8 }} />
+                                </TouchableOpacity>
+
+                                {showTypeDropdown && (
+                                    <Modal transparent visible={showTypeDropdown} animationType="fade" onRequestClose={() => setShowTypeDropdown(false)}>
+                                        <TouchableWithoutFeedback onPress={() => setShowTypeDropdown(false)}>
+                                            <View className="flex-1 bg-transparent">
+                                                <View 
+                                                    style={{ 
+                                                        position: 'absolute', 
+                                                        top: dropdownPosition.top, 
+                                                        right: dropdownPosition.right,
+                                                        minWidth: 145 
+                                                    }}
+                                                    className="bg-white rounded-[20px] shadow-2xl border border-gray-100 p-1 z-[999]"
+                                                >
+                                                    {[
+                                                        { label: "Expense", value: "EXPENSE", color: "text-red-500", icon: <TrendingDown size={16} color="#ef4444" /> },
+                                                        { label: "Income", value: "INCOME", color: "text-emerald-500", icon: <TrendingUp size={16} color="#10b981" /> }
+                                                    ].map((t) => (
+                                                        <TouchableOpacity
+                                                            key={t.value}
+                                                            onPress={() => { setType(t.value as any); setShowTypeDropdown(false); }}
+                                                            className={`px-5 py-2 rounded-full flex-row items-center ${type === t.value ? "bg-gray-100" : ""}`}
+                                                        >
+                                                            <View className="mr-3">{t.icon}</View>
+                                                            <Text className={`font-geist-sb text-base ${t.color}`}>
+                                                                {t.label}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </View>
+                                            </View>
+                                        </TouchableWithoutFeedback>
+                                    </Modal>
+                                )}
+                            </View>
                         </View>
                     </View>
+
+                    {/* Envelope Linking */}
+                    {activeEnvelopes.length > 0 && (
+                        <>
+                            <View className="mx-5 bg-white rounded-2xl px-5 py-4 mb-4 flex-row items-center justify-between border border-gray-100 shadow-sm">
+                                <View className="flex-row items-center">
+                                    <Goal size={18} color="#FF6A00" />
+                                    <Text className="text-gray-900 text-sm font-geist-sb ml-3">Link to Goal</Text>
+                                </View>
+                                <Switch
+                                    trackColor={{ false: "#e5e7eb", true: "#FF6A00" }}
+                                    thumbColor="#fff"
+                                    onValueChange={(val) => {
+                                        if (val && activeEnvelopes.length > 0) {
+                                            setSelectedEnvelopeId(activeEnvelopes[0].id);
+                                        } else {
+                                            setSelectedEnvelopeId(null);
+                                        }
+                                    }}
+                                    value={selectedEnvelopeId !== null}
+                                />
+                            </View>
+
+                            {selectedEnvelopeId !== null && (
+                                <View className="mx-5 bg-white rounded-2xl p-5 mb-4 border border-gray-100 shadow-sm">
+                                    <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-4">Select Target Goal</Text>
+                                    <View className="flex-row flex-wrap gap-x-4 gap-y-4">
+                                        {activeEnvelopes.map(env => {
+                                            const isSelected = selectedEnvelopeId === env.id;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={env.id}
+                                                    onPress={() => setSelectedEnvelopeId(env.id)}
+                                                    className="items-center mr-4"
+                                                >
+                                                    <View 
+                                                        className={`w-14 h-14 rounded-full items-center justify-center mb-1 border-2 ${isSelected ? 'border-[#FF6A00] bg-orange-50' : 'border-transparent bg-gray-50'}`}
+                                                    >
+                                                        <Text className="text-xl">{env.icon || '🎯'}</Text>
+                                                    </View>
+                                                    <Text className={`text-[10px] font-geist-md w-14 text-center ${isSelected ? 'text-[#FF6A00]' : 'text-gray-500'}`} numberOfLines={1}>{env.title}</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+                            )}
+                        </>
+                    )}
 
                     {/* Split with Friends */}
                     <View className="mx-5 bg-white rounded-2xl px-5 py-4 mb-4 flex-row items-center justify-between border border-gray-100 shadow-sm">
@@ -353,10 +734,129 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                         />
                     </View>
 
+                    {/* Extended Split UI */}
+                    {isSplit && (
+                        <View className="mx-5 bg-white rounded-2xl p-5 mb-4 border border-gray-100 shadow-sm">
+                            <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-4">Select Friends</Text>
+                            
+                            <View className="flex-row flex-wrap gap-x-4 gap-y-4">
+                                <TouchableOpacity 
+                                    className="items-center mr-2"
+                                    onPress={() => setAddFriendModalVisible(true)}
+                                >
+                                    <View className="w-12 h-12 rounded-full bg-gray-50 border border-gray-100 border-dashed items-center justify-center mb-1">
+                                        <Plus size={20} color="#9ca3af" />
+                                    </View>
+                                    <Text className="text-gray-400 text-[10px] font-geist-md">Add</Text>
+                                </TouchableOpacity>
+
+                                {friends.map((friend) => {
+                                    const isSelected = selectedFriends.includes(friend.id);
+                                    return (
+                                        <TouchableOpacity 
+                                            key={friend.id}
+                                            onPress={() => {
+                                                if (isSelected) {
+                                                    setSelectedFriends(selectedFriends.filter(id => id !== friend.id));
+                                                } else {
+                                                    setSelectedFriends([...selectedFriends, friend.id]);
+                                                }
+                                            }}
+                                            className="items-center mr-3"
+                                        >
+                                            <View className={`w-12 h-12 rounded-full overflow-hidden border-2 ${isSelected ? 'border-[#FF6A00]' : 'border-transparent'}`}>
+                                                <Image source={friend.avatar} className="w-full h-full" />
+                                            </View>
+                                            <Text className={`text-[10px] mt-1 font-geist-md ${isSelected ? 'text-[#FF6A00] font-geist-sb' : 'text-gray-500'}`}>
+                                                {friend.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+
+                                {selectedFriends.length > 0 && (
+                                    <View className="border-t border-gray-50 pt-5">
+                                        <View className="flex-row items-center justify-between mb-4">
+                                            <Text className="text-gray-500 text-sm font-geist-md">Split Type</Text>
+                                            <View ref={splitTriggerRef}>
+                                                <TouchableOpacity 
+                                                    onPress={() => {
+                                                        splitTriggerRef.current?.measureInWindow((x, y, width, height) => {
+                                                            setDropdownPosition({ top: y + height + 5, right: Dimensions.get('window').width - (x + width) });
+                                                            setShowSplitDropdown(true);
+                                                        });
+                                                    }}
+                                                    className="bg-gray-50 px-4 py-2 rounded-full border border-gray-100 flex-row items-center"
+                                                >
+                                                    <Text className="text-gray-700 font-geist-sb text-sm mr-2">
+                                                        {splitType === "EQUALLY" ? "Equally" : "Manual"}
+                                                    </Text>
+                                                    <ChevronRight size={12} color="#9ca3af" style={{ transform: [{ rotate: showSplitDropdown ? '90deg' : '0deg' }] }} />
+                                                </TouchableOpacity>
+
+                                                <Modal transparent visible={showSplitDropdown} animationType="fade" onRequestClose={() => setShowSplitDropdown(false)}>
+                                                    <TouchableWithoutFeedback onPress={() => setShowSplitDropdown(false)}>
+                                                        <View className="flex-1 ">
+                                                            <View 
+                                                                style={{ position: 'absolute', top: dropdownPosition.top, right: dropdownPosition.right, minWidth: 120 }}
+                                                                className="bg-white rounded-[20px] shadow-2xl border border-gray-100 p-1"
+                                                            >
+                                                                {["EQUALLY", "MANUAL"].map((mode) => (
+                                                                    <TouchableOpacity
+                                                                        key={mode}
+                                                                        onPress={() => { setSplitType(mode as any); setShowSplitDropdown(false); }}
+                                                                        className={`px-4 py-2 rounded-full ${splitType === mode ? "bg-gray-100" : ""}`}
+                                                                    >
+                                                                        <Text className={`font-geist-sb text-sm ${splitType === mode ? "text-[#FF6A00]" : "text-gray-600"}`}>
+                                                                            {mode === "EQUALLY" ? "Equally" : "Manual"}
+                                                                        </Text>
+                                                                    </TouchableOpacity>
+                                                                ))}
+                                                            </View>
+                                                        </View>
+                                                    </TouchableWithoutFeedback>
+                                                </Modal>
+                                            </View>
+                                        </View>
+
+                                        {splitType === "EQUALLY" ? (
+                                            <View className="rounded-xl p-0">
+                                                <Text className="text-[#FF6A00] text-base font-geist-md text-center">
+                                                    Each person pays {currency.symbol}{(parseFloat(amount || "0") / (selectedFriends.length + 1)).toFixed(2)}
+                                                </Text>
+                                            </View>
+                                        ) : (
+                                            <View className="gap-y-3">
+                                                {selectedFriends.map(id => {
+                                                    const friend = friends.find(f => f.id === id);
+                                                    return (
+                                                        <View key={id} className="flex-row items-center justify-between bg-gray-50 p-1 rounded-2xl border border-gray-100 mb-1.5">
+                                                            <Text className="text-gray-700 text-sm font-geist-md ml-2">{friend?.name}</Text>
+                                                            <View className="flex-row items-center">
+                                                                <Text className="text-gray-400 text-base mr-1">{currency.symbol}</Text>
+                                                                <TextInput
+                                                                    placeholder="0"
+                                                                    className="text-gray-900 font-geist-sb text-base min-w-[0px] text-right mr-1"
+                                                                    keyboardType="decimal-pad"
+                                                                    value={manualAmounts[id] || ""}
+                                                                    onChangeText={(val) => setManualAmounts({ ...manualAmounts, [id]: val })}
+                                                                />
+                                                            </View>
+                                                        </View>
+                                                    );
+                                                })}
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+                            </View>
+                        )}
+
                     {/* Quick Category Chips */}
                     <View className="mx-5 bg-white rounded-2xl p-4 mb-4 border border-gray-100 shadow-sm">
                         <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-4">Quick Category</Text>
-                        <View className="flex-row flex-wrap justify-between gap-y-5 px-1">
+                        <View className="flex-row flex-wrap justify-start gap-y-5 gap-x-15 px-1">
                             {QUICK_CATEGORIES.map((cat) => {
                                 const isSelected = selectedCategory === cat.name;
                                 const Icon = cat.icon;
@@ -365,7 +865,7 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                         key={cat.name}
                                         onPress={() => setSelectedCategory(isSelected ? null : cat.name)}
                                         className="items-center"
-                                        style={{ width: '22%' }}
+                                        style={{ width: '20%' }}
                                     >
                                         <View 
                                             className={`w-14 h-14 rounded-full items-center justify-center mb-1.5 border-2 ${isSelected ? 'border-[#FF6A00]' : 'border-transparent'}`}
@@ -377,42 +877,9 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                                     </TouchableOpacity>
                                 );
                             })}
-                            {/* Spacers to properly align items to the left on the last row */}
-                            {[...Array(Math.max(0, 4 - (QUICK_CATEGORIES.length % 4)))].map((_, i) => (
-                                <View key={`spacer-${i}`} style={{ width: '22%' }} />
-                            ))}
                         </View>
                     </View>
 
-                    {/* All Tags */}
-                    {tags && tags.length > 0 && (
-                        <View className="mx-5 bg-white rounded-2xl p-4 mb-4 border border-gray-100 shadow-sm">
-                            <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-3">All Tags</Text>
-                            <View className="flex-row flex-wrap gap-2">
-                                {tags.map((tag) => {
-                                    const isSelected = selectedTags.includes(tag.id);
-                                    return (
-                                        <TouchableOpacity
-                                            key={tag.id}
-                                            onPress={() => toggleTag(tag.id)}
-                                            className={`px-4 py-2.5 rounded-xl border ${isSelected ? "border-[#FF6A00] bg-orange-50" : "border-gray-200 bg-gray-50"}`}
-                                        >
-                                            <View className="flex-row items-center">
-                                                {isSelected ? (
-                                                    <Check size={12} color="#FF6A00" />
-                                                ) : (
-                                                    <View className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
-                                                )}
-                                                <Text className={`text-xs font-geist-sb ml-1.5 ${isSelected ? "text-[#FF6A00]" : "text-gray-500"}`}>
-                                                    {tag.name}
-                                                </Text>
-                                            </View>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-                        </View>
-                    )}
 
                     {/* Notes */}
                     <View className="mx-5 bg-white rounded-2xl p-4 mb-4 border border-gray-100 shadow-sm">
@@ -447,7 +914,113 @@ const AddExpenseSheet = forwardRef<BottomSheet, AddExpenseSheetProps>(
                         </TouchableOpacity>
                     </View>
                 </BottomSheetScrollView>
-            </BottomSheet>
+            </BottomSheetModal>
+
+
+
+            <MultiScanPreviewModal
+                ref={multiScanSheetRef}
+                transactions={multiScanTransactions}
+                onClose={() => multiScanSheetRef.current?.dismiss()}
+                onUpgrade={onUpgrade}
+                onSuccess={(count: number) => {
+                    multiScanSheetRef.current?.dismiss();
+                    onClose();
+                    showModal("Success", `Successfully imported ${count} transactions from scan!`, [{ text: "Great", onPress: hideModal }]);
+                }}
+            />
+
+            <StreakCelebration 
+                isVisible={!!reachedMilestone}
+                milestone={reachedMilestone}
+                currentStreak={currentStreakAfterTransaction}
+                onClose={() => {
+                    setReachedMilestone(null);
+                    onClose();
+                }}
+            />
+
+            {/* Add Friend - Native Modal (Mimicking Paste SMS Sheet) */}
+            <Modal
+                visible={addFriendModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setAddFriendModalVisible(false)}
+            >
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={{ flex: 1 }}
+                >
+                    <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.0)", justifyContent: "flex-end" }}>
+                        <TouchableWithoutFeedback onPress={() => setAddFriendModalVisible(false)}>
+                            <View style={{ flex: 1 }} />
+                        </TouchableWithoutFeedback>
+                        
+                        <View 
+                            className="bg-[#F9FAFB] rounded-t-[36px] overflow-hidden"
+                            style={{ maxHeight: "65%" }}
+                        >
+                            {/* Handle Indicator */}
+                            <View className="items-center pt-3 pb-6">
+                                <View className="w-12 h-1 bg-gray-300 rounded-full" />
+                            </View>
+
+                            {/* Header */}
+                            <View className="flex-row items-center justify-between px-6 pt-2 pb-0">
+                                
+                                <Text className="text-gray-900 text-lg font-geist-sb">Add Friend</Text>
+                                <View className="w-6" />
+                                <TouchableOpacity onPress={() => setAddFriendModalVisible(false)}>
+                                    <X size={22} color="#6B7280" />
+                                </TouchableOpacity>
+                                
+                            </View>
+
+                            <View className="px-6 pb-6 pt-1">
+                                <Text className="text-gray-400 text-sm font-geist-md mb-8">Create a name to start splitting expenses</Text>
+                                
+                                <View className="bg-white p-1 rounded-full border border-gray-100 mb-8">
+                                    <TextInput
+                                        className="px-5 py-3 text-gray-900 font-geist-md text-base"
+                                        placeholder="e.g. John Doe"
+                                        placeholderTextColor="#9ca3af"
+                                        value={newFriendName}
+                                        onChangeText={setNewFriendName}
+                                        autoFocus
+                                    />
+                                </View>
+
+                                <View className="flex-row gap-4 mb-6">
+                                    <TouchableOpacity 
+                                        onPress={() => setAddFriendModalVisible(false)}
+                                        className="flex-1 py-3 rounded-full bg-gray-100 items-center justify-center"
+                                    >
+                                        <Text className="text-gray-500 font-geist-sb text-base">Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            if (!newFriendName.trim()) return;
+                                            const newFriend = {
+                                                id: Date.now().toString(),
+                                                name: newFriendName.trim(),
+                                                avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)]
+                                            };
+                                            setFriends([...friends, newFriend]);
+                                            setSelectedFriends([...selectedFriends, newFriend.id]);
+                                            setNewFriendName("");
+                                            setAddFriendModalVisible(false);
+                                        }}
+                                        className="flex-1 py-3 rounded-full bg-[#FF6A00] items-center justify-center shadow-lg shadow-orange-200"
+                                    >
+                                        <Text className="text-white font-geist-sb text-base">Create & Select</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+            </>
         );
     }
 );

@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from "react";
 import {
     View, Text, TextInput, TouchableOpacity, ActivityIndicator,
-    Platform, Image, Alert
+    Platform, Image
 } from "react-native";
+import { useModal } from "../../providers/ModalProvider";
 import { useSignIn, useOAuth, useAuth } from "@clerk/clerk-expo";
 import { useRouter, Link } from "expo-router";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -16,6 +17,7 @@ export default function SignIn() {
     useWarmUpBrowser();
 
     const { signIn, setActive, isLoaded } = useSignIn();
+    const { showModal, hideModal } = useModal();
     const { getToken } = useAuth();
     const router = useRouter();
     const [email, setEmail] = useState("");
@@ -66,12 +68,11 @@ export default function SignIn() {
                     router.replace("/(tabs)/dashboard");
                 }
             } else {
-                // Use generic error if session creation fails without specific error
-                Alert.alert("Error", "Google Sign-In failed or was cancelled.");
+                showModal("Oh no!", "Google Sign-In failed or was cancelled.");
             }
         } catch (err: any) {
             console.error("OAuth error", err);
-            Alert.alert("Error", "Google Sign-In encountered an error.");
+            showModal("Oh no!", "Google Sign-In encountered an error.");
         }
     }, [startOAuthFlow]);
 
@@ -167,19 +168,19 @@ export default function SignIn() {
                         // If it's a phone code, it's usually auto-sent or we might need to trigger it? 
                         // Clerk usually sends it upon `signIn.create` if it's the default, or we might need to prepare it.
                         // Let's assume user just needs to enter code for now.
-                        Alert.alert("Verification Required", `Please enter the code sent to your ${(firstFactor as any).safeIdentifier || "device"}.`);
+                        showModal("Verification Required", `Please enter the code sent to your ${(firstFactor as any).safeIdentifier || "device"}.`);
                     } else {
                         setError("Unsupported 2FA method required.");
                     }
                 } else {
-                    Alert.alert("Sign In Incomplete", `Status: ${result.status}`);
+                    showModal("Sign In Incomplete", `Status: ${result.status}`);
                 }
             }
         } catch (err: any) {
             console.error("Sign In Error Details:", JSON.stringify(err, null, 2));
             const msg = err.errors?.[0]?.message || "Sign in failed.";
             setError(msg);
-            Alert.alert("Error", msg);
+            showModal("Sorry", msg);
         } finally {
             setLoading(false);
         }

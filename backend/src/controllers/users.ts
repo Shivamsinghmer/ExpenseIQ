@@ -2,6 +2,28 @@ import { Response, Request } from "express";
 import { z } from "zod";
 import prisma from "../services/prisma";
 import { clerkClient } from "@clerk/express";
+import { updateUserCurrency } from "../services/userService";
+import { AuthenticatedRequest } from "../middleware/auth";
+
+const updateCurrencySchema = z.object({
+    currencyCode: z.string().min(1),
+    currencySymbol: z.string().min(1)
+});
+
+export async function updateCurrency(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+        const { currencyCode, currencySymbol } = updateCurrencySchema.parse(req.body);
+        const user = await updateUserCurrency(req.clerkUserId!, currencyCode, currencySymbol);
+        res.json({ success: true, user });
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            res.status(400).json({ error: "Validation failed", details: error.issues });
+            return;
+        }
+        console.error("Update currency error:", error);
+        res.status(500).json({ error: "Failed to update currency settings." });
+    }
+}
 
 const deleteAccountSchema = z.object({
     email: z.string().email(),

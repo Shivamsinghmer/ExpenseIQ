@@ -14,7 +14,7 @@ function getGroqClient(): Groq {
     return groq;
 }
 
-const SYSTEM_PROMPT = `You are a precise financial assistant for ExpenseIQ. Your ONLY job is to analyze the user's financial data that is provided to you.
+const SYSTEM_PROMPT = `You are a precise financial assistant for ExpensePal. Your ONLY job is to analyze the user's financial data that is provided to you.
 
 STRICT RULES:
 1. NEVER invent, estimate, or assume financial values

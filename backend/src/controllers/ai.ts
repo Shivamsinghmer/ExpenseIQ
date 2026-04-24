@@ -75,19 +75,7 @@ function parseIntent(question: string): { startDate?: Date; endDate?: Date; type
     return result;
 }
 
-interface TransactionWithTags {
-    title: string;
-    amount: number;
-    type: string;
-    date: Date;
-    notes: string | null;
-    tags: { name: string }[];
-}
-
-interface TagWithTransactions {
-    name: string;
-    transactions: { amount: number; type: string }[];
-}
+// Interfaces removed post-tag migration
 
 // POST AI question
 export async function askQuestion(
@@ -133,22 +121,19 @@ export async function askQuestion(
         }
 
         // Fetch relevant financial data
-        const [transactions, tags, incomeAgg, expenseAgg] = await Promise.all([
+        const [transactions, categoryData, incomeAgg, expenseAgg] = await Promise.all([
             prisma.transaction.findMany({
                 where,
-                include: { tags: true },
                 orderBy: { date: "desc" },
                 take: 100,
             }),
-            prisma.tag.findMany({
-                where: { userId: user.id },
-                include: {
-                    transactions: {
-                        where,
-                        select: { amount: true, type: true },
-                    },
-                },
-            }),
+            // @ts-ignore - Bypass Prisma's circular reference TS bug on groupBy
+            prisma.transaction.groupBy({
+                by: ["category"],
+                where: { ...where, type: "EXPENSE" } as any,
+                _sum: { amount: true },
+                _count: { _all: true },
+            } as any),
             prisma.transaction.aggregate({
                 where: { ...where, type: "INCOME" },
                 _sum: { amount: true },
@@ -174,30 +159,24 @@ export async function askQuestion(
                 from: intent.startDate?.toISOString() || "all time",
                 to: intent.endDate?.toISOString() || "now",
             },
-            transactions: (transactions as TransactionWithTags[]).map((t: TransactionWithTags) => ({
+            transactions: (transactions as any[]).map((t: any) => ({
                 title: t.title,
                 amount: t.amount,
                 type: t.type,
                 date: t.date.toISOString().split("T")[0],
-                tags: t.tags.map((tag: { name: string }) => tag.name),
+                category: t.category,
                 notes: t.notes,
             })),
-            tagBreakdown: (tags as TagWithTransactions[]).map((tag: TagWithTransactions) => ({
-                name: tag.name,
-                totalAmount: tag.transactions.reduce((sum: number, t: { amount: number }) => sum + t.amount, 0),
-                transactionCount: tag.transactions.length,
-                incomeAmount: tag.transactions
-                    .filter((t: { amount: number; type: string }) => t.type === "INCOME")
-                    .reduce((sum: number, t: { amount: number }) => sum + t.amount, 0),
-                expenseAmount: tag.transactions
-                    .filter((t: { amount: number; type: string }) => t.type === "EXPENSE")
-                    .reduce((sum: number, t: { amount: number }) => sum + t.amount, 0),
+            categoryBreakdown: (categoryData as any[]).map((cat: any) => ({
+                name: cat.category || "Other",
+                totalSpent: cat._sum.amount || 0,
+                count: cat._count._all || 0,
             })),
         };
 
         console.log("AI Controller: Data context summary:", {
             transactionCount: financialData.transactions.length,
-            tagCount: financialData.tagBreakdown.length,
+            categoryCount: financialData.categoryBreakdown.length,
         });
 
         // Get AI response
