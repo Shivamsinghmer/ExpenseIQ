@@ -67,10 +67,10 @@ export default function AppPreview() {
     <section className="bg-[#fcfcfc] py-20 overflow-hidden">
       <div className="max-w-6xl mx-auto px-6">
         {/* Main Bento Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 auto-rows-[250px] lg:auto-rows-[300px]">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 auto-rows-[minmax(250px,auto)] md:auto-rows-[250px] lg:auto-rows-[300px]">
           
           {/* Card 1: Everything you need (Large, Left) */}
-          <div className="md:col-span-4 md:row-span-2 bg-orange-50 rounded-2xl border border-orange-100 p-10 pb-0 flex flex-col justify-between shadow-xs relative group overflow-hidden">
+          <div className="md:col-span-4 md:row-span-2 min-h-[400px] md:min-h-0 bg-orange-50 rounded-2xl border border-orange-100 p-10 pb-0 flex flex-col justify-between shadow-xs relative group overflow-hidden">
             <div className="z-10 relative">
               <h2 className="text-2xl lg:text-3xl font-bold text-gray-900 leading-tight mb-2">
                 Everything you need to control your finances
@@ -104,7 +104,7 @@ export default function AppPreview() {
           </div>
 
           {/* Card 3: Transaction Mockup (Large Right) */}
-          <div className="md:col-span-4 md:row-span-2 rounded-2xl p-10 pb-0 overflow-hidden relative shadow-xs group border border-orange-100">
+          <div className="md:col-span-4 md:row-span-2 min-h-[400px] md:min-h-0 rounded-2xl p-10 pb-0 overflow-hidden relative shadow-xs group border border-orange-100">
             {/* Dark Green Gradient Overlay */}
             <div className="absolute inset-0 bg-orange-50" />
             
@@ -161,7 +161,7 @@ export default function AppPreview() {
             </div>
 
             {/* In-card Visual Mockup */}
-            <div className="absolute right-[-20px] bottom-[-20px] w-72 h-72 bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-6">
+            <div className="absolute right-[-20px] bottom-[-20px] w-72 h-72 bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-6 scale-75 md:scale-100 origin-bottom-right">
                <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-[#FF6A00]/10 rounded-2xl flex items-center justify-center text-[#FF6A00] shadow-sm">
                     <TrendingUp size={24} />

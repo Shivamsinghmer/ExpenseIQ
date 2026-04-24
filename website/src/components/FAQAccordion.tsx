@@ -78,7 +78,7 @@ export default function FAQAccordion() {
                   {faq.question}
                 </span>
                 <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300",
+                  "w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center transition-all duration-300",
                   openIndex === index ? "bg-[#FF6A00] text-white rotate-180" : "bg-slate-50 text-slate-400 group-hover:bg-orange-50 group-hover:text-[#FF6A00]"
                 )}>
                   <ChevronDown size={18} />

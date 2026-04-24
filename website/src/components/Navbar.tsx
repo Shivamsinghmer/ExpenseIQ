@@ -77,14 +77,14 @@ export default function Navbar() {
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="absolute top-full left-0 right-0 bg-white border-t border-slate-100 p-6 lg:hidden shadow-2xl">
+        <div className="absolute top-full left-0 right-0 bg-white border-t border-slate-100 p-6 lg:hidden">
           <div className="flex flex-col gap-5">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="text-base font-bold text-slate-700 hover:text-forest-green transition-colors"
+                className="text-base font-semibold text-slate-700 hover:text-forest-green transition-colors"
               >
                 {link.name}
               </Link>
