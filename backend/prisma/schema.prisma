@@ -22,9 +22,18 @@ model User {
   subscriptionEndDate   DateTime?
   createdAt             DateTime      @default(now())
   transactions          Transaction[]
-  tags                  Tag[]
   chatMessages          ChatMessage[]
   orders                Order[]
+  emis                  Emi[]
+  envelopes             BudgetEnvelope[]
+  budgets               Budget[]
+  currentStreak         Int           @default(0)
+  longestStreak         Int           @default(0)
+  lastActiveDate        DateTime?
+  name                  String?
+  avatarUrl             String?
+  currencyCode          String        @default("INR")
+  currencySymbol        String        @default("₹")
 }
 
 model Order {
@@ -59,10 +68,10 @@ model Transaction {
   amount    Float
   type      TransactionType
   notes     String?
+  category  String?
   date      DateTime
   userId    String
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tags      Tag[]           @relation("TransactionTags")
   createdAt DateTime        @default(now())
 
   @@index([userId])
@@ -70,14 +79,47 @@ model Transaction {
   @@index([type])
 }
 
-model Tag {
-  id           String        @id @default(cuid())
-  name         String
-  color        String
-  userId       String
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[] @relation("TransactionTags")
 
-  @@unique([name, userId])
+model Emi {
+  id            String   @id @default(cuid())
+  title         String
+  monthlyAmount Float
+  totalMonths   Int
+  paidMonths    Int      @default(0)
+  startDate     DateTime
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isDone        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
   @@index([userId])
+}
+
+model BudgetEnvelope {
+  id        String   @id @default(cuid())
+  title     String
+  icon      String?  // Emoji or lucide icon name
+  budget    Float
+  spent     Float    @default(0)
+  startDate DateTime
+  endDate   DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Budget {
+  id        String   @id @default(cuid())
+  userId    String
+  category  String
+  amount    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, category])
 }

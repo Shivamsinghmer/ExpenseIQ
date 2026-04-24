@@ -3,10 +3,16 @@ import express from "express";
 import cors from "cors";
 import os from "os";
 import transactionRoutes from "./routes/transactions";
-import tagRoutes from "./routes/tags";
 import aiRoutes from "./routes/ai";
 import paymentRoutes from "./routes/payments";
 import userRoutes from "./routes/users";
+import emiRoutes from "./routes/emis";
+import envelopeRoutes from "./routes/envelopes";
+import streakRoutes from "./routes/streaks";
+import budgetRoutes from "./routes/budgets";
+import smsRoutes from "./routes/sms";
+import scanRoutes from "./routes/scan";
+
 
 console.log("--- Environment Verification ---");
 console.log("Server restarting...");
@@ -22,7 +28,7 @@ app.use(cors({
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
 }));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
 
 // Request logging
 app.use((req, _res, next) => {
@@ -40,10 +46,16 @@ app.get("/health", (_req, res) => {
 
 // API Routes
 app.use("/api/transactions", transactionRoutes);
-app.use("/api/tags", tagRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/emis", emiRoutes);
+app.use("/api/envelopes", envelopeRoutes);
+app.use("/api/streaks", streakRoutes);
+app.use("/api/budgets", budgetRoutes);
+app.use("/api/sms", smsRoutes);
+app.use("/api/scan", scanRoutes);
+
 
 // 404 handler
 app.use((_req, res) => {
@@ -70,7 +82,7 @@ const getLocalIP = () => {
 
 app.listen(Number(PORT), "0.0.0.0", () => {
     const localIP = getLocalIP();
-    console.log(`🚀 ExpenseIQ API server running on port ${PORT}`);
+    console.log(`🚀 ExpensePal API server running on port ${PORT}`);
     console.log(`🔗 Local access: http://localhost:${PORT}`);
     console.log(`📱 Physical device access: http://${localIP}:${PORT}`);
 });

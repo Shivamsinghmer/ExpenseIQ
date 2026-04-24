@@ -142,7 +142,7 @@ export default function AppPrivacyPage() {
           Manage Your Privacy
         </h1>
         <p className="text-lg text-zinc-600 dark:text-zinc-400 max-w-xl mx-auto">
-          We value your privacy. Use this portal to request the deletion of your ExpenseIQ account and all associated personal data.
+          We value your privacy. Use this portal to request the deletion of your ExpensePal account and all associated personal data.
         </p>
       </div>
 

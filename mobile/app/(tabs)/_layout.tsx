@@ -1,19 +1,21 @@
 import { Tabs, useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
-import { View, Text, ActivityIndicator, TouchableOpacity, Platform, LayoutChangeEvent, Alert, TextInput } from "react-native";
+import { View, Text, ActivityIndicator, TouchableOpacity, Platform, LayoutChangeEvent, TextInput, Modal, KeyboardAvoidingView } from "react-native";
+import { useModal } from "../../providers/ModalProvider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Home, List, Plus, Tags, BarChart3 } from "lucide-react-native";
+import { Home, List, Plus, BarChart3, X, Search } from "lucide-react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from "react-native-reanimated";
 import AddExpenseSheet from "../../components/AddExpenseSheet";
-import BottomSheet, { BottomSheetBackdrop } from "@gorhom/bottom-sheet";
+import BottomSheet from "@gorhom/bottom-sheet";
+import { smsAPI } from "../../services/api";
 
-const VISIBLE_TABS = ["dashboard", "transactions", "ai"];
+const VISIBLE_TABS = ["dashboard", "transactions", "analytics"];
 
 const TAB_META: Record<string, { icon: any; label: string }> = {
     dashboard: { icon: Home, label: "Home" },
     transactions: { icon: List, label: "Transactions" },
-    ai: { icon: BarChart3, label: "Analytics" },
+    analytics: { icon: BarChart3, label: "Analytics" },
 };
 
 function CustomTabBar({ state, descriptors, navigation, onAddPress }: any) {
@@ -135,38 +137,51 @@ function CustomTabBar({ state, descriptors, navigation, onAddPress }: any) {
     );
 }
 
+import { useSheet } from "../../providers/sheet-provider";
+
 export default function TabsLayout() {
+    const { showModal, hideModal } = useModal();
     const { isSignedIn, isLoaded } = useAuth();
     const router = useRouter();
+    const { sheetRef, openSheet, closeSheet, initialData } = useSheet();
 
-    const sheetRef = useRef<BottomSheet>(null);
-    const smsSheetRef = useRef<BottomSheet>(null);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
+    const [smsModalVisible, setSmsModalVisible] = useState(false);
     const [pastedSMS, setPastedSMS] = useState("");
+    const [isParsing, setIsParsing] = useState(false);
+    const [parsedAmount, setParsedAmount] = useState("");
+    const [parsedTitle, setParsedTitle] = useState("");
 
-    const openSheet = () => {
-        setIsSheetOpen(true);
-        sheetRef.current?.snapToIndex(0);
-    };
-
-    const handleParseSMS = () => {
+    const handleParseSMS = async () => {
         if (!pastedSMS.trim()) {
-            Alert.alert("Error", "Please paste an SMS first.");
+            showModal("Sorry!", "Please paste an SMS first.");
             return;
         }
 
-        // Simple banking SMS parsing logic
-        const amountMatch = pastedSMS.match(/(?:INR|Rs\.?|₹)\s?(\d+(?:\.\d+)?)/i);
-        const merchantMatch = pastedSMS.match(/(?:at|to|vpa|merch:)\s*([A-Za-z0-9\s._-]+?)(?:\s*(?:on|using|via|for|ref|\d)|$)/i);
+        try {
+            setIsParsing(true);
+            const res = await smsAPI.parse(pastedSMS);
+            const parsedData = res.data;
 
-        if (amountMatch || merchantMatch) {
-            // Signal AddExpenseSheet to update its state
-            // We'll pass these as props or use a shared state if needed
-            // For now, let's just close the SMS sheet and notify
-            Alert.alert("SMS Parsed", `Detected Amount: ${amountMatch?.[1] || "N/A"}`);
+            if (parsedData.amount > 0 || parsedData.title !== "New Transaction") {
+                setSmsModalVisible(false);
+                setPastedSMS("");
+                
+                // Open the add transaction sheet with parsed data
+                openSheet({
+                    amount: parsedData.amount > 0 ? parsedData.amount.toString() : "",
+                    title: parsedData.title,
+                    type: parsedData.type === "DEBIT" ? "EXPENSE" : "INCOME"
+                });
+            } else {
+                showModal("Could not parse", "We couldn't extract enough details from this SMS. Please check the text.");
+            }
+        } catch (error) {
+            console.error("SMS Parsing Error:", error);
+            showModal("Error", "Failed to contact the parsing service.");
+        } finally {
+            setIsParsing(false);
         }
-        
-        smsSheetRef.current?.close();
     };
 
     useEffect(() => {
@@ -186,7 +201,7 @@ export default function TabsLayout() {
     return (
         <View style={{ flex: 1 }}>
             <Tabs
-                tabBar={(props) => <CustomTabBar {...props} onAddPress={openSheet} />}
+                tabBar={(props) => <CustomTabBar {...props} onAddPress={() => openSheet()} />}
                 screenOptions={{
                     headerShown: false,
                 }}
@@ -194,57 +209,82 @@ export default function TabsLayout() {
                 <Tabs.Screen name="dashboard" />
                 <Tabs.Screen name="transactions" />
                 <Tabs.Screen name="add" options={{ href: null }} />
-                <Tabs.Screen name="tags" options={{ href: null }} />
-                <Tabs.Screen name="ai" />
+                <Tabs.Screen name="analytics" />
             </Tabs>
-            
+
             <AddExpenseSheet 
                 ref={sheetRef} 
-                onClose={() => setIsSheetOpen(false)} 
+                onClose={closeSheet} 
                 onUpgrade={() => router.push("/subscription")}
-                onSMSPress={() => smsSheetRef.current?.expand()}
+                onSMSPress={() => setSmsModalVisible(true)}
                 smsData={pastedSMS}
+                initialData={initialData}
             />
 
-            {/* Separate SMS Sheet at Layout Level for Total Stability */}
-            <BottomSheet
-                ref={smsSheetRef}
-                index={-1}
-                snapPoints={["60%"]}
-                enablePanDownToClose
-                backgroundStyle={{ backgroundColor: "#F9FAFB", borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
-                handleIndicatorStyle={{ backgroundColor: "#D1D5DB" }}
+            {/* SMS Modal - Uses native Modal so it renders above EVERYTHING */}
+            <Modal
+                visible={smsModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setSmsModalVisible(false)}
             >
-                <View className="flex-row items-center justify-between px-6 pt-2 pb-6">
-                    <TouchableOpacity onPress={() => smsSheetRef.current?.close()}>
-                        <Text className="text-gray-500 text-base font-geist-md">Cancel</Text>
-                    </TouchableOpacity>
-                    <Text className="text-gray-900 text-lg font-geist-sb">Paste SMS</Text>
-                    <View className="w-10" />
-                </View>
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={{ flex: 1 }}
+                >
+                    <View style={{ flex: 1, backgroundColor: "transparent", justifyContent: "flex-end" }}>
+                        <View 
+                            className="bg-[#F9FAFB] rounded-t-3xl"
+                            style={{ maxHeight: "65%" }}
+                        >
+                            {/* Handle */}
+                            <View className="items-center pt-3 pb-2">
+                                <View className="w-10 h-1 bg-gray-300 rounded-full" />
+                            </View>
 
-                <View className="px-5">
-                    <View className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-                        <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-3">Paste Bank SMS</Text>
-                        <TextInput
-                            className="text-gray-800 text-sm font-geist-md min-h-[140px]"
-                            placeholder="Paste your bank SMS here..."
-                            placeholderTextColor="#9ca3af"
-                            value={pastedSMS}
-                            onChangeText={setPastedSMS}
-                            multiline
-                            textAlignVertical="top"
-                        />
+                            {/* Header */}
+                            <View className="flex-row items-center justify-between px-6 pt-2 pb-4">
+                                <TouchableOpacity onPress={() => setSmsModalVisible(false)}>
+                                    <X size={22} color="#6B7280" />
+                                </TouchableOpacity>
+                                <Text className="text-gray-900 text-lg font-geist-sb">Paste SMS</Text>
+                                <View className="w-6" />
+                            </View>
+
+                            {/* Content */}
+                            <View className="px-5 pb-8">
+                                <View className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                                    <Text className="text-gray-400 text-[10px] font-geist-sb uppercase tracking-wider mb-3">Paste Bank SMS</Text>
+                                    <TextInput
+                                        className="text-gray-800 text-sm font-geist-md min-h-[140px]"
+                                        placeholder="Paste your bank SMS here..."
+                                        placeholderTextColor="#9ca3af"
+                                        value={pastedSMS}
+                                        onChangeText={setPastedSMS}
+                                        multiline
+                                        textAlignVertical="top"
+                                        autoFocus
+                                    />
+                                </View>
+
+                                <TouchableOpacity 
+                                    onPress={handleParseSMS}
+                                    disabled={isParsing || !pastedSMS.trim()}
+                                    className="w-full mt-6 py-4 rounded-[100px] bg-[#FF6A00] items-center justify-center flex-row"
+                                    activeOpacity={0.85}
+                                    style={{ opacity: isParsing || !pastedSMS.trim() ? 0.6 : 1 }}
+                                >
+                                    {isParsing ? (
+                                        <ActivityIndicator color="#fff" size="small" />
+                                    ) : (
+                                        <Text className="text-white font-geist-b text-base ml-2">Parse SMS</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
                     </View>
-
-                    <TouchableOpacity 
-                        onPress={handleParseSMS}
-                        className="w-full mt-6 py-4 rounded-[100px] bg-[#FF6A00] items-center justify-center flex-row"
-                    >
-                        <Text className="text-white font-geist-b text-base">Parse SMS</Text>
-                    </TouchableOpacity>
-                </View>
-            </BottomSheet>
+                </KeyboardAvoidingView>
+            </Modal>
         </View>
     );
 }

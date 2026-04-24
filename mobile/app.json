@@ -9,7 +9,9 @@
     "newArchEnabled": true,
     "scheme": "expensepal",
     "splash": {
-      "backgroundColor": "#ffffff"
+      "image": "./assets/splash.jpg",
+      "resizeMode": "contain",
+      "backgroundColor": "#FF6A00"
     },
     "ios": {
       "supportsTablet": true,

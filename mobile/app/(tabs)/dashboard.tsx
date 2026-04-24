@@ -5,12 +5,14 @@ import {
     ScrollView,
     TouchableOpacity,
     RefreshControl,
-    ActivityIndicator,
-    Alert,
     Platform,
     Dimensions,
     Image,
+    ActivityIndicator,
+    Modal,
+    TouchableWithoutFeedback,
 } from "react-native";
+import SkeletonLoader from "../../components/SkeletonLoader";
 import { LineChart } from "../../components/LineChart";
 import Svg, { Path } from "react-native-svg";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,44 +20,39 @@ import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { transactionsAPI, paymentsAPI, type SummaryResponse, type Transaction } from "../../services/api";
+import * as FileSystem from 'expo-file-system/legacy';
+const StorageAccessFramework = (FileSystem as any).StorageAccessFramework;
+import { transactionsAPI, paymentsAPI, streaksAPI, type SummaryResponse, type Transaction } from "../../services/api";
 import {
-    ArrowDown, ArrowUp, File, TrendingUp, TrendingDown,
-    Crown, AlertCircle, Clock, MessageSquare, Sparkles,
-    Landmark, Wallet, ChevronRight, List, Flame, RefreshCw, Map
+    Landmark, Wallet, Timer, ChevronRight, List, Flame, RefreshCw, Map,
+    ArrowDown, ArrowUp, File, Crown, AlertCircle, Clock, MessageSquare, Sparkles,
+    Utensils, Coffee, ShoppingCart, Car, Home as HomeIcon,
+    Zap, HeartPulse, Plane, Gamepad2, GraduationCap,
+    Gift, TrendingUp, Wallet as WalletIcon, MoreHorizontal, Edit2
 } from "lucide-react-native";
+import { TransactionItem } from "../../components/TransactionItem";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useModal } from "../../providers/ModalProvider";
 
 
-function TransactionItem({ item }: { item: Transaction }) {
-    const isIncome = item.type === "INCOME";
-    return (
-        <View className="bg-white rounded-2xl p-4 mb-3 flex-row items-center border border-gray-100 shadow-sm">
-            <View
-                className={`w-12 h-12 rounded-full items-center justify-center mr-4 ${isIncome ? "bg-emerald-50" : "bg-red-50"}`}
-            >
-                {isIncome ? (
-                    <TrendingUp size={20} color="#10b981" />
-                ) : (
-                    <TrendingDown size={20} color="#ef4444" />
-                )}
-            </View>
-            <View className="flex-1">
-                <Text className="text-gray-900 font-geist-sb text-base">{item.title}</Text>
-                <Text className="text-gray-400 text-xs font-geist-md mt-0.5">
-                    {new Date(item.date).toLocaleDateString("en-IN", {
-                        month: "short",
-                        day: "numeric",
-                    })}
-                    {item.tags.length > 0 && ` • ${item.tags.map((t) => t.name).join(", ")}`}
-                </Text>
-            </View>
-            <Text className={`font-geist-b text-base ${isIncome ? "text-emerald-600" : "text-red-500"}`}>
-                {isIncome ? "+" : "-"}₹{item.amount.toFixed(2)}
-            </Text>
-        </View>
-    );
-}
+const CATEGORY_ICONS: Record<string, any> = {
+    Food: Utensils,
+    Coffee: Coffee,
+    Shopping: ShoppingCart,
+    Transport: Car,
+    Rent: HomeIcon,
+    Bills: Zap,
+    Health: HeartPulse,
+    Travel: Plane,
+    Fun: Gamepad2,
+    Education: GraduationCap,
+    Gifts: Gift,
+    Invest: TrendingUp,
+    Salary: WalletIcon,
+    Other: MoreHorizontal,
+};
+
+
 
 const escapeHtml = (unsafe: string) => {
     return unsafe
@@ -77,8 +74,8 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
                 ${t.type === "INCOME" ? "+" : "-"} &#8377; ${t.amount.toFixed(2)}
             </td>
             <td>${t.type}</td>
-            <td>${escapeHtml(t.tags.map((tag) => tag.name).join(", ")) || "-"}</td>
-            <td>${escapeHtml(t.notes || "-")}</td>
+            <td>${escapeHtml(t.category || "-")}</td>
+            <td>${escapeHtml(t.notes ? t.notes.replace(/EMI:[^|]+\|\s*/, "") : "-")}</td>
         </tr>`
         )
         .join("");
@@ -116,15 +113,15 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
         <div class="summary">
             <div class="summary-card income">
                 <h3>Total Income</h3>
-                <div class="amount">&#8377; ${summary.totalIncome.toFixed(2)}</div>
+                <div class="amount">${(summary as any).currencySymbol || '₹'} ${summary.totalIncome.toFixed(2)}</div>
             </div>
             <div class="summary-card expense">
                 <h3>Total Expenses</h3>
-                <div class="amount">&#8377; ${summary.totalExpense.toFixed(2)}</div>
+                <div class="amount">${(summary as any).currencySymbol || '₹'} ${summary.totalExpense.toFixed(2)}</div>
             </div>
             <div class="summary-card balance">
                 <h3>Balance</h3>
-                <div class="amount">&#8377; ${summary.balance.toFixed(2)}</div>
+                <div class="amount">${(summary as any).currencySymbol || '₹'} ${summary.balance.toFixed(2)}</div>
             </div>
         </div>
         <div class="section-title">All Transactions (${transactions.length})</div>
@@ -135,7 +132,7 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
                     <th>Title</th>
                     <th>Amount</th>
                     <th>Type</th>
-                    <th>Tags</th>
+                    <th>Category</th>
                     <th>Notes</th>
                 </tr>
             </thead>
@@ -148,6 +145,14 @@ function generatePdfHtml(transactions: Transaction[], summary: SummaryResponse) 
     </html>`;
 }
 
+import { useSheet } from "../../providers/sheet-provider";
+import * as ImagePicker from 'expo-image-picker';
+import BottomSheet from "@gorhom/bottom-sheet";
+import { useRef, useEffect } from "react";
+import { BudgetSheet } from "../../components/BudgetSheet";
+import { budgetsAPI, usersAPI } from "../../services/api";
+import { useCurrency, SUPPORTED_CURRENCIES } from "../../providers/CurrencyProvider";
+
 export default function Dashboard() {
     const { signOut } = useAuth();
     const { user } = useUser();
@@ -156,6 +161,64 @@ export default function Dashboard() {
     const [pdfLoading, setPdfLoading] = useState(false);
     const [catTab, setCatTab] = useState<"current" | "prev">("current");
     const queryClient = useQueryClient();
+    const { openSheet } = useSheet();
+    const budgetSheetRef = useRef<BottomSheet>(null);
+    const { currency, setCurrency, formatAmount } = useCurrency();
+    const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
+    const [currencyDropdownPosition, setCurrencyDropdownPosition] = useState({ top: 0, right: 0 });
+    const currencyTriggerRef = useRef<View>(null);
+
+    const { data: budgetsData } = useQuery({
+        queryKey: ["budgets"],
+        queryFn: async () => {
+            const res = await budgetsAPI.getAll();
+            return res.data;
+        }
+    });
+
+    const handleScanAndRecord = () => {
+        showAppModal("Choose Source", "How would you like to scan your receipt?", [
+            { text: "Cancel", onPress: hideAppModal, style: "cancel" },
+            { 
+                text: "Camera", 
+                onPress: async () => {
+                    hideAppModal();
+                    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+                    if (permissionResult.granted === false) {
+                        showAppModal("Permission Required", "Camera access is needed.", [{ text: "OK", onPress: hideAppModal }]);
+                        return;
+                    }
+                    const result = await ImagePicker.launchCameraAsync({
+                        allowsEditing: true,
+                        quality: 0.7,
+                        base64: true,
+                    });
+                    if (!result.canceled && result.assets[0].base64) {
+                        openSheet({ image: result.assets[0].uri, base64: result.assets[0].base64 });
+                    }
+                }
+            },
+            { 
+                text: "Photos", 
+                onPress: async () => {
+                    hideAppModal();
+                    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (permissionResult.granted === false) {
+                        showAppModal("Permission Required", "Photos access is needed.", [{ text: "OK", onPress: hideAppModal }]);
+                        return;
+                    }
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                        allowsEditing: true,
+                        quality: 0.7,
+                        base64: true,
+                    });
+                    if (!result.canceled && result.assets[0].base64) {
+                        openSheet({ image: result.assets[0].uri, base64: result.assets[0].base64 });
+                    }
+                }
+            }
+        ]);
+    };
 
     const handleSignOut = async () => {
         try {
@@ -166,7 +229,44 @@ export default function Dashboard() {
         }
     };
 
+    // --- Query Prefetching ---
+    useEffect(() => {
+        const prefetchData = async () => {
+            // Prefetch Transactions (default: Last 6 Months)
+            const now = new Date();
+            const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+            const txnParams = { 
+                page: "1", 
+                limit: "20", 
+                startDate: sixMonthsAgo.toISOString() 
+            };
+            
+            queryClient.prefetchQuery({
+                queryKey: ["transactions", "ALL", "ALL", 1],
+                queryFn: () => transactionsAPI.getAll(txnParams).then(res => res.data),
+            });
+
+            // Prefetch Analytics (default: This Month)
+            const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            queryClient.prefetchQuery({
+                queryKey: ["summary", "thismonth"],
+                queryFn: () => transactionsAPI.getSummary({ startDate: thisMonthStart.toISOString() }).then(res => res.data),
+            });
+            
+            // Prefetch All Transactions for Analytics
+            queryClient.prefetchQuery({
+                queryKey: ["allTxnsForAnalytics", "thismonth"],
+                queryFn: () => transactionsAPI.getAll({ startDate: thisMonthStart.toISOString(), limit: "200" }).then(res => res.data),
+            });
+        };
+
+        const timer = setTimeout(prefetchData, 2000); // Wait 2s after mount to not block initial load
+        return () => clearTimeout(timer);
+    }, [queryClient]);
+
     const [range, setRange] = useState<"1W" | "1M" | "3M" | "1Y" | "All">("1M");
+
+    const { showModal: showAppModal, hideModal: hideAppModal } = useModal();
 
     const getDateRange = (): Record<string, string> | undefined => {
         const end = new Date();
@@ -183,7 +283,7 @@ export default function Dashboard() {
 
     const {
         data: summary,
-        isLoading,
+        isLoading: isLoadingSummary,
         refetch,
         isRefetching,
     } = useQuery<SummaryResponse>({
@@ -206,6 +306,18 @@ export default function Dashboard() {
         },
     });
 
+    const {
+        data: streakStats,
+        isLoading: isLoadingStreak,
+        refetch: refetchStreak,
+    } = useQuery({
+        queryKey: ["streak"],
+        queryFn: async () => {
+            const res = await streaksAPI.getStats();
+            return res.data;
+        },
+    });
+
     const showTrialBanner = !subscription?.isPro && subscription?.trialEndDate;
 
     // Prepare Chart Data
@@ -220,7 +332,9 @@ export default function Dashboard() {
         try {
             setPdfLoading(true);
             if (!summary) {
-                Alert.alert("Error", "Dashboard data not ready. Please wait.");
+                showAppModal("Please wait", "Dashboard data not ready.", [
+                    { text: "Okay", onPress: hideAppModal }
+                ]);
                 return;
             }
 
@@ -228,7 +342,9 @@ export default function Dashboard() {
             const allTransactions = res.data.transactions;
 
             if (!allTransactions || allTransactions.length === 0) {
-                Alert.alert("No Data", "No transactions to export.");
+                showAppModal("It's empty", "No transactions to export.", [
+                    { text: "Okay", onPress: hideAppModal }
+                ]);
                 return;
             }
 
@@ -238,33 +354,58 @@ export default function Dashboard() {
                 base64: false
             });
 
-            if (await Sharing.isAvailableAsync()) {
-                const options: Sharing.SharingOptions = {
-                    mimeType: "application/pdf",
-                    dialogTitle: "ExpensePal Transactions Report",
-                };
-                if (Platform.OS === "ios") {
-                    options.UTI = "com.adobe.pdf";
+            const fileName = "Your_Transactions.pdf";
+            const finalUri = (FileSystem as any).cacheDirectory + fileName;
+            
+            // Rename file to have the correct filename for sharing/saving
+            await FileSystem.copyAsync({
+                from: uri,
+                to: finalUri
+            });
+
+            if (Platform.OS === 'android') {
+                const SAF = StorageAccessFramework;
+                if (SAF) {
+                    const permissions = await SAF.requestDirectoryPermissionsAsync();
+                    if (permissions.granted) {
+                        const base64 = await FileSystem.readAsStringAsync(finalUri, { encoding: (FileSystem as any).EncodingType.Base64 });
+                        await SAF.createFileAsync(permissions.directoryUri, fileName, 'application/pdf')
+                            .then(async (safUri: string) => {
+                                await FileSystem.writeAsStringAsync(safUri, base64, { encoding: (FileSystem as any).EncodingType.Base64 });
+                                showAppModal("Success", "Report downloaded successfully!", [
+                                    { text: "Okay", onPress: hideAppModal }
+                                ]);
+                            })
+                            .catch((e: any) => {
+                                console.error(e);
+                                Sharing.shareAsync(finalUri);
+                            });
+                    } else {
+                        await Sharing.shareAsync(finalUri);
+                    }
+                } else {
+                    // Fallback to sharing if SAF is not supported in this version/environment
+                    await Sharing.shareAsync(finalUri);
                 }
-                await Sharing.shareAsync(uri, options);
             } else {
-                Alert.alert("Success", `PDF saved to: ${uri}`);
+                await Sharing.shareAsync(finalUri, {
+                    mimeType: 'application/pdf',
+                    UTI: 'com.adobe.pdf',
+                    dialogTitle: 'Download Report'
+                });
             }
         } catch (error: any) {
             console.error("PDF generation error:", error);
-            Alert.alert("Error", `Failed to generate PDF: ${error.message || "Unknown error"}`);
+            showAppModal("Sorry!", `Failed to generate PDF: ${error.message || "Unknown error"}`, [
+                { text: "Okay", onPress: hideAppModal }
+            ]);
         } finally {
             setPdfLoading(false);
         }
     };
 
-    if (isLoading) {
-        return (
-            <View className="flex-1 items-center justify-center bg-[#F5F5F5]">
-                <ActivityIndicator size="large" color="#FF6A00" />
-                <Text className="text-gray-400 mt-4 font-geist-md">Loading your finances...</Text>
-            </View>
-        );
+    if (isLoadingSummary || isLoadingStreak) {
+        return <SkeletonLoader type="dashboard" />;
     }
 
     const handleProPress = () => {
@@ -273,10 +414,10 @@ export default function Dashboard() {
                 ? Math.ceil((new Date(subscription.proExpiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
                 : 0;
 
-            Alert.alert(
+            showAppModal(
                 "Pro Subscription",
                 `You are a Pro member!\n\n${daysLeft > 0 ? `Your subscription expires in ${daysLeft} days.` : "Your subscription is active."}`,
-                [{ text: "OK" }]
+                [{ text: "OK", onPress: hideAppModal }]
             );
         } else {
             router.push("/subscription");
@@ -284,16 +425,16 @@ export default function Dashboard() {
     };
 
     const handleRefresh = async () => {
-        await Promise.all([refetch(), refetchSubscription()]);
+        await Promise.all([refetch(), refetchSubscription(), refetchStreak()]);
     };
 
     const firstName = user?.firstName || "User";
     const today = new Date();
     const dateStr = today.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
     const totalExpense = summary?.totalExpense || 0;
-    const budget = 20000; // Default budget – can be updated later
+    const budget = budgetsData?.reduce((acc, curr) => acc + curr.amount, 0) || 0;
     const remaining = Math.max(budget - totalExpense, 0);
-    const spendPercent = Math.min((totalExpense / budget) * 100, 100);
+    const spendPercent = budget > 0 ? Math.min((totalExpense / budget) * 100, 100) : 0;
     const expenseCount = summary?.expenseCount || 0;
     const avgPerDay = expenseCount > 0 ? Math.round(totalExpense / 30) : 0;
 
@@ -304,13 +445,14 @@ export default function Dashboard() {
     const prevMonthName = prevMonth.toLocaleDateString("en-IN", { month: "short" });
 
     return (
-        <ScrollView
-            className="flex-1 bg-[#F5F5F5]"
-            contentContainerStyle={{ paddingBottom: 140 }}
-            refreshControl={
-                <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor="#FF6A00" />
-            }
-        >
+        <View className="flex-1">
+            <ScrollView
+                className="flex-1 bg-[#F5F5F5]"
+                contentContainerStyle={{ paddingBottom: 140 }}
+                refreshControl={
+                    <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor="#FF6A00" />
+                }
+            >
             {/* Trial/Pro Status Banner */}
             {showTrialBanner && (
                 <View
@@ -355,57 +497,106 @@ export default function Dashboard() {
                         <Text className="text-gray-900 text-2xl font-geist-b">Hello, {firstName} 👋</Text>
                         <Text className="text-gray-400 text-sm font-geist-md mt-1">{dateStr}</Text>
                     </View>
-                    <TouchableOpacity
-                        onPress={() => {
-                            Alert.alert("Account", "Manage your account", [
-                                { text: "Cancel", style: "cancel" },
-                                { text: "Sign Out", style: "destructive", onPress: handleSignOut },
-                            ]);
-                        }}
-                    >
-                        {user?.imageUrl ? (
-                            <Image
-                                source={{ uri: user.imageUrl }}
-                                className="w-10 h-10 rounded-full border-2 border-[#FF6A00]"
-                            />
-                        ) : (
-                            <View className="w-10 h-10 rounded-full bg-[#FF6A00] items-center justify-center">
-                                <Text className="text-white font-geist-b text-lg">{firstName.charAt(0)}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+
+                    <View className="flex-row items-center">
+                        {/* Currency Selector */}
+                        <View ref={currencyTriggerRef}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    currencyTriggerRef.current?.measureInWindow((x, y, width, height) => {
+                                        setCurrencyDropdownPosition({ top: y + height + 8, right: Dimensions.get('window').width - (x + width) });
+                                        setShowCurrencyDropdown(true);
+                                    });
+                                }}
+                                activeOpacity={0.8}
+                                className="flex-row items-center bg-white px-3 py-2 rounded-full shadow-sm border border-gray-50 mr-3"
+                            >
+                                <Text className="text-lg mr-2">{currency.flag}</Text>
+                                <Text className="text-sm font-geist-sb text-[#FF6A00]">{currency.symbol}</Text>
+                                <ChevronRight size={12} color="#9ca3af" style={{ transform: [{ rotate: showCurrencyDropdown ? '90deg' : '0deg' }], marginLeft: 4 }} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={() => {
+                                showAppModal("Are you signing out?", "You can always sign back in at any time.", [
+                                    { text: "Cancel", onPress: hideAppModal, style: "cancel" },
+                                    { text: "Sign Out", style: "destructive", onPress: () => {
+                                        hideAppModal();
+                                        handleSignOut();
+                                    }},
+                                ]);
+                            }}
+                        >
+                            {user?.imageUrl ? (
+                                <Image
+                                    source={{ uri: user.imageUrl }}
+                                    className="w-10 h-10 rounded-full border-2 border-[#FF6A00]"
+                                />
+                            ) : (
+                                <View className="w-10 h-10 rounded-full bg-[#FF6A00] items-center justify-center">
+                                    <Text className="text-white font-geist-b text-lg">{firstName.charAt(0)}</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 
             {/* ─── Total Monthly Spend Card ─── */}
             <View className="px-5 mb-4">
-                <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                    <Text className="text-gray-500 text-center text-sm font-geist-md mb-2">Total Monthly Spend</Text>
+                <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 relative">
+                    <Text className="text-gray-500 text-center text-sm font-geist-md mb-2 mt-1">Total Monthly Spend</Text>
+                    <TouchableOpacity 
+                        onPress={() => budgetSheetRef.current?.expand()} 
+                        className="absolute right-4 top-4 w-8 h-8 rounded-full bg-gray-50 items-center justify-center"
+                    >
+                        <Edit2 size={14} color="#FF6A00" />
+                    </TouchableOpacity>
+                    
                     <Text className="text-[#FF6A00] text-center text-4xl font-geist-b mb-4">
-                        ₹{totalExpense.toLocaleString("en-IN")}
+                        {formatAmount(totalExpense)}
                     </Text>
 
-                    {/* Progress Bar */}
-                    <View className="h-3 bg-gray-100 rounded-full overflow-hidden mb-3">
-                        <View
-                            className="h-full rounded-full"
-                            style={{
-                                width: `${spendPercent}%`,
-                                backgroundColor: spendPercent > 80 ? '#ef4444' : '#22c55e',
-                            }}
-                        />
-                    </View>
+                    {budget === 0 && (
+                        <TouchableOpacity 
+                            onPress={() => budgetSheetRef.current?.expand()} 
+                            className="bg-orange-50 py-3 rounded-[14px] border border-orange-100 flex-row items-center justify-center mb-3"
+                        >
+                            <Edit2 size={16} color="#FF6A00" className="mr-4" />
+                            <Text className="text-[#FF6A00] font-geist-sb text-sm">Add a Budget first</Text>
+                        </TouchableOpacity>
+                    )}
 
-                    <View className="flex-row justify-between">
-                        <View>
-                            <Text className="text-gray-400 text-xs font-geist-md">Remaining</Text>
-                            <Text className="text-emerald-600 text-lg font-geist-b">₹{remaining.toLocaleString("en-IN")}</Text>
+                    {/* Progress Bar & Details */}
+                    {expenseCount > 0 ? (
+                        <>
+                            <View className="h-3 bg-gray-100 rounded-full overflow-hidden mb-3">
+                                <View
+                                    className="h-full rounded-full"
+                                    style={{
+                                        width: `${spendPercent}%`,
+                                        backgroundColor: spendPercent > 80 ? '#ef4444' : '#22c55e',
+                                    }}
+                                />
+                            </View>
+
+                            <View className="flex-row justify-between">
+                                <View>
+                                    <Text className="text-gray-400 text-xs font-geist-md">Remaining</Text>
+                                    <Text className="text-emerald-600 text-lg font-geist-b">{formatAmount(remaining)}</Text>
+                                </View>
+                                <View className="items-end">
+                                    <Text className="text-gray-400 text-xs font-geist-md">Budget</Text>
+                                    <Text className="text-gray-800 text-lg font-geist-b">{formatAmount(budget)}</Text>
+                                </View>
+                            </View>
+                        </>
+                    ) : (
+                        <View className="py-4 items-center justify-center border-t border-gray-50 mt-2">
+                            <Text className="text-gray-400 font-geist-md text-sm">Add a transaction to continue</Text>
                         </View>
-                        <View className="items-end">
-                            <Text className="text-gray-400 text-xs font-geist-md">Budget</Text>
-                            <Text className="text-gray-800 text-lg font-geist-b">₹{budget.toLocaleString("en-IN")}</Text>
-                        </View>
-                    </View>
+                    )}
                 </View>
             </View>
 
@@ -423,15 +614,21 @@ export default function Dashboard() {
                         <TrendingUp size={18} color="#FF6A00" />
                     </View>
                     <Text className="text-gray-400 text-xs font-geist-md">Avg/Day</Text>
-                    <Text className="text-gray-900 text-xl font-geist-b">₹{avgPerDay.toLocaleString("en-IN")}</Text>
+                    <Text className="text-gray-900 text-xl font-geist-b">{formatAmount(avgPerDay)}</Text>
                 </View>
-                <View className="flex-1 bg-white rounded-[20px] p-4 shadow-sm border border-gray-100 items-start">
+                <TouchableOpacity 
+                    onPress={() => router.push("/streak")}
+                    activeOpacity={0.85}
+                    className="flex-1 bg-white rounded-[20px] p-4 shadow-sm border border-gray-100 items-start"
+                >
                     <View className="w-9 h-9 rounded-xl bg-orange-50 items-center justify-center mb-3">
                         <Flame size={18} color="#FF6A00" />
                     </View>
                     <Text className="text-gray-400 text-xs font-geist-md">Streak</Text>
-                    <Text className="text-gray-900 text-xl font-geist-b">7 days</Text>
-                </View>
+                    <Text className="text-gray-900 text-xl font-geist-b">
+                        {streakStats?.currentStreak || 0} {streakStats?.currentStreak === 1 ? 'day' : 'days'}
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             {/* ─── Tools Grid ─── */}
@@ -440,7 +637,11 @@ export default function Dashboard() {
                     <Text className="text-gray-900 text-xl font-geist-b">Tools</Text>
                 </View>
                 <View className="flex-row gap-3 mb-3">
-                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                    <TouchableOpacity 
+                        onPress={handleScanAndRecord}
+                        activeOpacity={0.85}
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                    >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <File size={20} color="#FF6A00" />
                         </View>
@@ -448,28 +649,77 @@ export default function Dashboard() {
                     </TouchableOpacity>
                     <TouchableOpacity
                         className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
-                        onPress={() => router.push("/(tabs)/ai")}
+                        onPress={() => router.push("/ai")}
+                        activeOpacity={0.85}
                     >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <MessageSquare size={20} color="#FF6A00" />
                         </View>
                         <Text className="text-gray-900 text-xs font-geist-sb">Ask Money</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
-                        <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
-                            <Sparkles size={20} color="#FF6A00" />
-                        </View>
-                        <Text className="text-gray-900 text-xs font-geist-sb">Money Story</Text>
-                    </TouchableOpacity>
+                    <View className="flex-1 relative">
+                        <TouchableOpacity 
+                            onPress={() => {
+                                const today = new Date();
+                                const isLastDay = today.getDate() === new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+                                
+                                if (isLastDay) {
+                                    router.push("/money-story");
+                                } else {
+                                    showAppModal("Patience buddy", "Please wait for the end of the month to view your story.", [
+                                        { text: "Got it", onPress: hideAppModal }
+                                    ]);
+                                }
+                            }}
+                            activeOpacity={0.85}
+                            className="bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100 w-full"
+                        >
+                            <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                                <Sparkles size={20} color="#FF6A00" />
+                            </View>
+                            <Text className="text-gray-900 text-xs font-geist-sb">Money Story</Text>
+                        </TouchableOpacity>
+                        
+                        {(() => {
+                            const today = new Date();
+                            const isLastDay = today.getDate() === new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+                            if (isLastDay) return null;
+                            
+                            return (
+                                <View 
+                                    style={{ 
+                                        position: 'absolute', 
+                                        top: -4, 
+                                        right: -4, 
+                                        backgroundColor: 'white',
+                                        borderRadius: 12,
+                                        padding: 4,
+                                        borderWidth: 1,
+                                        borderColor: '#F3F4F6',
+                                    }}
+                                >
+                                    <Timer size={16} color="#FF6A00" />
+                                </View>
+                            );
+                        })()}
+                    </View>
                 </View>
                 <View className="flex-row gap-3">
-                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                    <TouchableOpacity 
+                        onPress={() => router.push("/emi-tracker")}
+                        activeOpacity={0.85}
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                    >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <Landmark size={20} color="#FF6A00" />
                         </View>
                         <Text className="text-gray-900 text-xs font-geist-sb">EMI Tracker</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100">
+                    <TouchableOpacity 
+                        onPress={() => router.push("/envelopes")}
+                        activeOpacity={0.85}
+                        className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
+                    >
                         <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
                             <Wallet size={20} color="#FF6A00" />
                         </View>
@@ -479,17 +729,14 @@ export default function Dashboard() {
                         className="flex-1 bg-white rounded-[20px] py-5 items-center shadow-sm border border-gray-100"
                         onPress={handleDownloadPdf}
                         disabled={pdfLoading}
+                        activeOpacity={0.85}
                     >
-                        {pdfLoading ? (
-                            <ActivityIndicator size="small" color="#FF6A00" />
-                        ) : (
-                            <>
-                                <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
-                                    <File size={20} color="#FF6A00" />
-                                </View>
-                                <Text className="text-gray-900 text-xs font-geist-sb">Report</Text>
-                            </>
-                        )}
+                        <View className="w-10 h-10 rounded-xl bg-orange-50 items-center justify-center mb-2">
+                            <File size={20} color="#FF6A00" />
+                        </View>
+                        <Text className="text-gray-900 text-xs font-geist-sb">
+                            {pdfLoading ? "Downloading" : "Report"}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -522,12 +769,12 @@ export default function Dashboard() {
                         insights.push({ emoji: "🧾", text: `Average transaction: ₹${avgTxn.toLocaleString("en-IN")} across ${expenseCount} expenses.` });
                     }
 
-                    if (summary?.tagBreakdown && summary.tagBreakdown.length > 0) {
-                        const topTag = summary.tagBreakdown[0];
-                        insights.push({ emoji: "🏷️", text: `Top category: ${topTag.name} with ₹${topTag.totalSpent.toLocaleString("en-IN")} spent.` });
+                    if (summary?.categoryBreakdown && summary.categoryBreakdown.length > 0) {
+                        const topCat = summary.categoryBreakdown[0];
+                        insights.push({ emoji: "🏷️", text: `Top category: ${topCat.name} with ₹${topCat.totalSpent.toLocaleString("en-IN")} spent.` });
                     }
 
-                    if (remaining > 0 && budget > 0) {
+                    if (expenseCount > 0 && remaining > 0 && budget > 0) {
                         const daysLeft = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate();
                         if (daysLeft > 0) {
                             const dailyBudget = Math.round(remaining / daysLeft);
@@ -536,7 +783,7 @@ export default function Dashboard() {
                     }
 
                     if (insights.length === 0) {
-                        insights.push({ emoji: "✨", text: "Start tracking expenses to get personalized insights!" });
+                        insights.push({ emoji: "✨", text: "Add a transaction to continue and see smart AI insights!" });
                     }
 
                     return insights.slice(0, 3).map((insight, i) => (
@@ -547,45 +794,6 @@ export default function Dashboard() {
                     ));
                 })()}
             </View>
-
-            {/* ─── Spending by Category ─── */}
-            {summary?.tagBreakdown && summary.tagBreakdown.length > 0 && (
-                <View className="px-5 mb-6">
-                    <Text className="text-gray-900 text-xl font-geist-b mb-4">Spending by Category</Text>
-
-                    {/* Month Tabs */}
-                    <View className="flex-row gap-2 mb-4">
-                        <TouchableOpacity
-                            onPress={() => setCatTab("current")}
-                            className={`px-5 py-2 rounded-full ${catTab === "current" ? "bg-[#FF6A00]" : "bg-white border border-gray-200"}`}
-                        >
-                            <Text className={`text-sm font-geist-sb ${catTab === "current" ? "text-white" : "text-gray-500"}`}>
-                                This Month
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => setCatTab("prev")}
-                            className={`px-5 py-2 rounded-full ${catTab === "prev" ? "bg-[#FF6A00]" : "bg-white border border-gray-200"}`}
-                        >
-                            <Text className={`text-sm font-geist-sb ${catTab === "prev" ? "text-white" : "text-gray-500"}`}>
-                                {prevMonthName}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Category Items */}
-                    {summary.tagBreakdown.map((tag) => (
-                        <View key={tag.id} className="bg-white rounded-2xl p-4 mb-3 flex-row items-center border border-gray-100 shadow-sm">
-                            <View className="w-4 h-4 rounded-full mr-3" style={{ backgroundColor: tag.color }} />
-                            <View className="flex-1">
-                                <Text className="text-gray-900 text-sm font-geist-sb">{tag.name}</Text>
-                                <Text className="text-gray-400 text-xs font-geist-md">{tag.count} transactions</Text>
-                            </View>
-                            <Text className="text-gray-900 text-base font-geist-b">₹{tag.totalSpent.toLocaleString("en-IN")}</Text>
-                        </View>
-                    ))}
-                </View>
-            )}
 
 
             {/* ─── Recent Transactions ─── */}
@@ -599,7 +807,9 @@ export default function Dashboard() {
 
                 {summary?.recentTransactions && summary.recentTransactions.length > 0 ? (
                     summary.recentTransactions.map((transaction) => (
-                        <TransactionItem key={transaction.id} item={transaction} />
+                        <View key={transaction.id} className="mb-3 bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden">
+                            <TransactionItem item={transaction} />
+                        </View>
                     ))
                 ) : (
                     <View className="bg-white border border-gray-200 border-dashed rounded-2xl p-6 items-center justify-center">
@@ -610,6 +820,45 @@ export default function Dashboard() {
                     </View>
                 )}
             </View>
-        </ScrollView>
+            </ScrollView>
+            <BudgetSheet ref={budgetSheetRef} onClose={() => budgetSheetRef.current?.close()} />
+
+            {/* Currency Dropdown Modal */}
+            {showCurrencyDropdown && (
+                <Modal transparent visible={showCurrencyDropdown} animationType="fade" onRequestClose={() => setShowCurrencyDropdown(false)}>
+                    <TouchableWithoutFeedback onPress={() => setShowCurrencyDropdown(false)}>
+                        <View className="flex-1 bg-transparent">
+                            <View 
+                                style={{ 
+                                    position: 'absolute', 
+                                    top: currencyDropdownPosition.top, 
+                                    right: currencyDropdownPosition.right,
+                                    width: 120 
+                                }}
+                                className="bg-white rounded-[24px] shadow-2xl border border-gray-100 p-1 z-[999]"
+                            >
+                                {SUPPORTED_CURRENCIES.map((curr) => (
+                                    <TouchableOpacity
+                                        key={curr.code}
+                                        onPress={() => { setCurrency(curr); setShowCurrencyDropdown(false); }}
+                                        className={`px-4 py-2 rounded-full flex-row items-center justify-between ${currency.code === curr.code ? "bg-orange-50" : ""}`}
+                                    >
+                                        <View className="flex-row items-center">
+                                            <Text className="text-lg mr-3">{curr.flag}</Text>
+                                            <Text className={`font-geist-sb text-sm ${currency.code === curr.code ? "text-[#FF6A00]" : "text-gray-700"}`}>
+                                                {curr.code}
+                                            </Text>
+                                        </View>
+                                        <Text className={`font-geist-sb text-sm ${currency.code === curr.code ? "text-[#FF6A00]" : "text-gray-400"}`}>
+                                            {curr.symbol}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+                    </TouchableWithoutFeedback>
+                </Modal>
+            )}
+        </View>
     );
 }

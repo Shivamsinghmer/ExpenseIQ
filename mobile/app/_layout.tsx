@@ -1,6 +1,9 @@
 import React, { useEffect } from "react";
 import { Stack } from "expo-router";
+import { View } from "react-native";
+
 import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from "../providers/auth-provider";
 import { QueryProvider } from "../providers/query-provider";
 import { ThemeProvider, useTheme } from "../providers/theme-provider";
@@ -15,8 +18,10 @@ function StatusBarWrapper() {
     return <StatusBar style={isDark ? "light" : "dark"} />;
 }
 
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { SheetProvider } from "../providers/sheet-provider";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { CurrencyProvider } from "../providers/CurrencyProvider";
+import { ModalProvider } from "../providers/ModalProvider";
 
 export default function RootLayout() {
     const [fontsLoaded] = useFonts({
@@ -33,19 +38,25 @@ export default function RootLayout() {
     }, [fontsLoaded]);
 
     if (!fontsLoaded) {
-        return null;
+        return <View style={{ flex: 1, backgroundColor: "#FF6A00" }} />;
     }
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <BottomSheetModalProvider>
                 <AuthProvider>
-                    <QueryProvider>
-                        <ThemeProvider>
-                            <StatusBarWrapper />
-                            <Stack screenOptions={{ headerShown: false }} />
-                        </ThemeProvider>
-                    </QueryProvider>
+                    <CurrencyProvider>
+                        <ModalProvider>
+                            <QueryProvider>
+                                <ThemeProvider>
+                                    <SheetProvider>
+                                        <StatusBarWrapper />
+                                        <Stack screenOptions={{ headerShown: false }} />
+                                    </SheetProvider>
+                                </ThemeProvider>
+                            </QueryProvider>
+                        </ModalProvider>
+                    </CurrencyProvider>
                 </AuthProvider>
             </BottomSheetModalProvider>
         </GestureHandlerRootView>

@@ -36,24 +36,26 @@ api.interceptors.request.use(
 
 // Response interceptor for error handling
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        // console.log(`[API Response] ${response.status} ${response.config.url}`);
+        return response;
+    },
     (error) => {
-        if (error.response?.status === 401) {
-            console.warn("Unauthorized - token may be expired");
+        const status = error.response?.status;
+        const url = error.config?.url;
+        
+        if (status === 401) {
+            console.warn(`[API Warning] Unauthorized access for ${url} (Token syncing)`);
+            return Promise.reject(error);
         }
+        
+        console.error(`[API Error] ${status || "Network Error"} ${url}`);
         return Promise.reject(error);
     }
 );
 
 // ====== TRANSACTION API ======
 
-export interface Tag {
-    id: string;
-    name: string;
-    color: string;
-    userId: string;
-    _count?: { transactions: number };
-}
 
 export interface Transaction {
     id: string;
@@ -61,9 +63,9 @@ export interface Transaction {
     amount: number;
     type: "INCOME" | "EXPENSE";
     notes?: string;
+    category?: string;
     date: string;
     userId: string;
-    tags: Tag[];
     createdAt: string;
 }
 
@@ -84,10 +86,8 @@ export interface SummaryResponse {
     incomeCount: number;
     expenseCount: number;
     recentTransactions: Transaction[];
-    tagBreakdown: {
-        id: string;
+    categoryBreakdown: {
         name: string;
-        color: string;
         totalSpent: number;
         count: number;
     }[];
@@ -103,8 +103,20 @@ export interface CreateTransactionData {
     amount: number;
     type: "INCOME" | "EXPENSE";
     notes?: string;
+    category?: string;
     date: string;
-    tagIds?: string[];
+}
+
+export interface Milestone {
+    id: number;
+    days: number;
+    label: string;
+    emoji: string;
+    color: string;
+}
+
+export interface CreateTransactionResponse extends Transaction {
+    newMilestone?: Milestone | null;
 }
 
 // Transactions
@@ -113,28 +125,16 @@ export const transactionsAPI = {
         api.get<TransactionListResponse>("/transactions", { params }),
     getById: (id: string) => api.get<Transaction>(`/transactions/${id}`),
     create: (data: CreateTransactionData) =>
-        api.post<Transaction>("/transactions", data),
+        api.post<CreateTransactionResponse>("/transactions", data),
     update: (id: string, data: Partial<CreateTransactionData>) =>
         api.put<Transaction>(`/transactions/${id}`, data),
     delete: (id: string) => api.delete(`/transactions/${id}`),
     getSummary: (params?: Record<string, string>) =>
         api.get<SummaryResponse>("/transactions/summary", { params }),
+    bulkCreate: (data: any[]) =>
+        api.post("/transactions/bulk", { transactions: data }),
 };
 
-// Tags
-export interface CreateTagData {
-    name: string;
-    color: string;
-}
-
-export const tagsAPI = {
-    getAll: () => api.get<Tag[]>("/tags"),
-    getById: (id: string) => api.get<Tag>(`/tags/${id}`),
-    create: (data: CreateTagData) => api.post<Tag>("/tags", data),
-    update: (id: string, data: Partial<CreateTagData>) =>
-        api.put<Tag>(`/tags/${id}`, data),
-    delete: (id: string) => api.delete(`/tags/${id}`),
-};
 
 // Payments
 export const paymentsAPI = {
@@ -164,6 +164,140 @@ export const aiAPI = {
         api.post<AIResponse>("/ai/ask", { question }),
     getHistory: () => api.get<any[]>("/ai/history"),
     clearHistory: () => api.delete("/ai/history"),
+};
+
+// EMI Tracker
+export interface EMI {
+    id: string;
+    title: string;
+    monthlyAmount: number;
+    totalMonths: number;
+    paidMonths: number;
+    startDate: string;
+    isDone: boolean;
+    createdAt: string;
+}
+
+export interface CreateEMIData {
+    title: string;
+    monthlyAmount: number;
+    totalMonths: number;
+    paidMonths?: number;
+    startDate: string;
+}
+
+export const emisAPI = {
+    getAll: () => api.get<EMI[]>("/emis"),
+    create: (data: CreateEMIData) => api.post<EMI>("/emis", data),
+    update: (id: string, data: Partial<CreateEMIData>) => api.put<EMI>(`/emis/${id}`, data),
+    delete: (id: string) => api.delete(`/emis/${id}`),
+};
+
+// Budget Envelopes
+export interface BudgetEnvelope {
+    id: string;
+    title: string;
+    icon?: string;
+    budget: number;
+    spent: number;
+    startDate: string;
+    endDate: string;
+    createdAt: string;
+}
+
+export interface CreateEnvelopeData {
+    title: string;
+    icon?: string;
+    budget: number;
+    spent?: number;
+    startDate: string;
+    endDate: string;
+}
+
+export const envelopesAPI = {
+    getAll: () => api.get<BudgetEnvelope[]>("/envelopes"),
+    create: (data: CreateEnvelopeData) => api.post<BudgetEnvelope>("/envelopes", data),
+    update: (id: string, data: Partial<CreateEnvelopeData>) => api.put<BudgetEnvelope>(`/envelopes/${id}`, data),
+    delete: (id: string) => api.delete(`/envelopes/${id}`),
+};
+
+// Streak & Gamification
+export interface StreakStats {
+    currentStreak: number;
+    longestStreak: number;
+    activeDaysThisMonth: number;
+    activeDates: string[];
+    daysInMonth: number;
+    lastActiveDate: string | null;
+    percentile: number;
+}
+
+export interface LeaderboardEntry {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+    currentStreak?: number;
+    longestStreak?: number;
+}
+
+export interface LeaderboardResponse {
+    longest: LeaderboardEntry[];
+}
+
+export const streaksAPI = {
+    getStats: () => api.get<StreakStats>("/streaks"),
+    getLeaderboard: (timeframe: string = "all-time") => 
+        api.get<LeaderboardResponse>("/streaks/leaderboard", { params: { timeframe } }),
+};
+
+// Budgets
+export interface CategoryBudget {
+    id: string;
+    category: string;
+    amount: number;
+}
+
+export const budgetsAPI = {
+    getAll: () => api.get<CategoryBudget[]>("/budgets"),
+    update: (data: { category: string; amount: number }[]) => api.put<CategoryBudget[]>("/budgets", { budgets: data }),
+};
+
+// User Settings
+export const usersAPI = {
+    updateCurrency: (currencyCode: string, currencySymbol: string) =>
+        api.put("/users/currency", { currencyCode, currencySymbol }),
+};
+
+// SMS Parsing
+export interface ParsedSMS {
+    amount: number;
+    title: string;
+    type: "DEBIT" | "CREDIT";
+    date?: string;
+    currency?: string;
+}
+
+export const smsAPI = {
+    parse: (text: string) => api.post<ParsedSMS>("/sms/parse", { text }),
+};
+
+// Receipt Scanning
+export interface ScannedTransaction {
+    amount: number;
+    merchant: string;
+    type: "EXPENSE" | "INCOME";
+    date?: string;
+    currency?: string;
+    category?: string;
+}
+
+export interface ScannedReceiptResponse {
+    documentType: "RECEIPT" | "STATEMENT";
+    transactions: ScannedTransaction[];
+}
+
+export const scanAPI = {
+    scanReceipt: (base64Image: string) => api.post<ScannedReceiptResponse>("/scan/receipt", { image: base64Image }),
 };
 
 export default api;
