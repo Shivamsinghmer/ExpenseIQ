@@ -9,9 +9,9 @@
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
-### 📱 Mobile Experience
+### Mobile Experience
 
 - **AI-Powered Chat**: Natural language interaction with your financial data using Google Gemini.
 - **Smart Imports**: Automatic data extraction from Transaction SMS and physical receipts.
@@ -19,7 +19,7 @@
 - **Advanced Tools**: Built-in EMI trackers, debt managers, and disciplined budget envelope systems.
 - **Secure Payments**: Integrated with Razorpay for seamless Pro subscriptions.
 
-### 🌐 Website Landing Page
+### Website Landing Page
 
 - **Modern Aesthetic**: A brand-consistent, premium design with smooth animations.
 - **Currency Sync**: Interactive pricing section supporting multiple currencies (INR, USD, EUR, etc.) with real-time flag updates.
@@ -28,7 +28,7 @@
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```bash
 ExpensePal/
@@ -40,7 +40,7 @@ ExpensePal/
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -82,7 +82,7 @@ npm run dev
 
 ---
 
-## 🔧 Tech Stack
+## Tech Stack
 
 | Component    | Technologies                                                         |
 | :----------- | :------------------------------------------------------------------- |
@@ -93,7 +93,7 @@ npm run dev
 
 ---
 
-## 🛡️ Security & Privacy
+## Security & Privacy
 
 - **Authentication**: Industry-standard JWT verification via Clerk.
 - **Data Isolation**: Multi-tenant architecture ensuring complete user data privacy.
@@ -102,7 +102,7 @@ npm run dev
 
 ---
 
-## � License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
