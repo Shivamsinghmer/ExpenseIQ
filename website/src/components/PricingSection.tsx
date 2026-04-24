@@ -7,19 +7,19 @@ import { cn } from "@/lib/utils";
 const PLAN_PRICES = {
   monthly: {
     INR: { symbol: "₹", price: 150, label: "India", flag: "🇮🇳" },
-    USD: { symbol: "$", price: 2.29, label: "USA", flag: "🇺🇸" },
-    EUR: { symbol: "€", price: 2.09, label: "Europe", flag: "🇪🇺" },
-    GBP: { symbol: "£", price: 1.79, label: "UK", flag: "🇬🇧" },
-    JPY: { symbol: "¥", price: 300, label: "Japan", flag: "🇯🇵" },
-    AED: { symbol: "AED", price: 8.99, label: "UAE", flag: "🇦🇪" }
+    USD: { symbol: "$", price: 2.00, label: "USA", flag: "🇺🇸" },
+    EUR: { symbol: "€", price: 1.80, label: "Europe", flag: "🇪🇺" },
+    GBP: { symbol: "£", price: 1.60, label: "UK", flag: "🇬🇧" },
+    JPY: { symbol: "¥", price: 280, label: "Japan", flag: "🇯🇵" },
+    AED: { symbol: "AED", price: 6.99, label: "UAE", flag: "🇦🇪" }
   },
   annual: {
     INR: { symbol: "₹", price: 1530, label: "India", flag: "🇮🇳" },
-    USD: { symbol: "$", price: 22.49, label: "USA", flag: "🇺🇸" },
-    EUR: { symbol: "€", price: 20.99, label: "Europe", flag: "🇪🇺" },
-    GBP: { symbol: "£", price: 17.99, label: "UK", flag: "🇬🇧" },
-    JPY: { symbol: "¥", price: 3000, label: "Japan", flag: "🇯🇵" },
-    AED: { symbol: "AED", price: 82.49, label: "UAE", flag: "🇦🇪" }
+    USD: { symbol: "$", price: 18.00, label: "USA", flag: "🇺🇸" },
+    EUR: { symbol: "€", price: 16.00, label: "Europe", flag: "🇪🇺" },
+    GBP: { symbol: "£", price: 15.00, label: "UK", flag: "🇬🇧" },
+    JPY: { symbol: "¥", price: 2700, label: "Japan", flag: "🇯🇵" },
+    AED: { symbol: "AED", price: 61.99, label: "UAE", flag: "🇦🇪" }
   }
 };
 

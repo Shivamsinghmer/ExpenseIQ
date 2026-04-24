@@ -28,19 +28,19 @@ import { useCurrency } from "../providers/CurrencyProvider";
 const PLAN_PRICES: any = {
     monthly: {
         INR: 150,
-        USD: 2.29,
-        EUR: 2.09,
-        GBP: 1.79,
-        JPY: 300,
-        AED: 8.99
+        USD: 2.00,
+        EUR: 1.80,
+        GBP: 1.60,
+        JPY: 280,
+        AED: 6.99
     },
     annual: {
         INR: 1530,
-        USD: 22.49,
-        EUR: 20.99,
-        GBP: 17.99,
-        JPY: 3000,
-        AED: 82.49
+        USD: 18.00,
+        EUR: 16.00,
+        GBP: 15.00,
+        JPY: 2700,
+        AED: 61.99
     }
 };
 

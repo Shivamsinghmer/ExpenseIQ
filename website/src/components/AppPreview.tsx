@@ -7,8 +7,8 @@ import { Star, ArrowRight, TrendingUp, Wallet, Bell, RefreshCw } from "lucide-re
 const testimonials = [
   {
     rating: 5,
-    text: "The best app for keeping track of finances. I've been using it for almost 7 years.",
-    author: "Ayperi, App Store"
+    text: "The best app for keeping track of finances. I've been using it for a few months.",
+    author: "Ayperi, Play Store"
   },
   {
     rating: 4,
@@ -18,7 +18,7 @@ const testimonials = [
   {
     rating: 4.5,
     text: "Finally a finance app that doesn't feel like a chore. The SMS import changed my life.",
-    author: "Michael, App Store"
+    author: "Michael, Play Store"
   }
 ];
 

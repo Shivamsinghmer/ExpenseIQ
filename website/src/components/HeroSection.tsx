@@ -64,7 +64,7 @@ export default function HeroSection() {
               <Link href="https://play.google.com/store/apps/details?id=com.expensepal.app" className="block">
                 <Image 
                   src="/playstore.webp" 
-                  alt="Download on App Store and Google Play" 
+                  alt="Download on Google Play" 
                   width={200}
                   height={200} 
                   className="h-48 w-full object-contain"
